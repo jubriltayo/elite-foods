@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Type-safe <Link href="..."> values, checked at build time.
+  typedRoutes: true,
 };
 
 export default nextConfig;
