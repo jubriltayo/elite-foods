@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Elite Foods and Snacks
 
-## Getting Started
+Mobile-first ecommerce MVP for a Nigerian snacks and drinks shop. Browse →
+Cart → Google Login → Checkout → Pay on Delivery → Confirmation email.
 
-First, run the development server:
+Status: **Phase 1 (foundation) complete.** Catalog, cart, auth, checkout,
+orders, email and admin are not built yet. See `AGENTS.md` §14 for the phase
+plan.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Stack
+
+- Next.js 16 (App Router, Turbopack), TypeScript strict, Tailwind CSS v4
+- Supabase PostgreSQL (database only — **not** Supabase Auth)
+- Zod for validation
+- Mailgun for confirmation email (not implemented yet)
+- Vercel for deployment
+
+Identity flow: Google Cloud Console → Google OAuth → Auth.js → Next.js session
+→ `profiles` row keyed on `google_sub`.
+
+## Local development
+
+### 1. Database
+
+The development database is a local PostgreSQL instance:
+
+```text
+postgresql://postgres:postgres@localhost:5432/elite_foods
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Apply the schema and seed data:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# schema: 5 tables, RLS, indexes, create_order() RPC
+psql postgresql://postgres:postgres@localhost:5432/elite_foods \
+  -v ON_ERROR_STOP=1 --single-transaction \
+  -f supabase/migrations/0001_init.sql
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# seed: 10 products across 3 categories
+psql postgresql://postgres:postgres@localhost:5432/elite_foods \
+  -v ON_ERROR_STOP=1 --single-transaction \
+  -f supabase/seed.sql
+```
 
-## Learn More
+`--single-transaction` means a failure part-way through leaves the database
+unchanged.
 
-To learn more about Next.js, take a look at the following resources:
+`0001_init.sql` is portable across Supabase and plain Postgres: it only revokes
+`create_order()` from the `anon` and `authenticated` roles when they exist.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Environment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+cp .env.example .env.local
+```
 
-## Deploy on Vercel
+`.env.local` is gitignored. See `.env.example` for the full variable list,
+grouped by the phase that needs it.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 3. Run
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm install
+npm run dev
+```
+
+Open <http://localhost:3000>. The home page reports whether it can reach the
+database and how many products are seeded.
+
+## Scripts
+
+| Command          | Does                            |
+| ---------------- | ------------------------------- |
+| `npm run dev`    | Development server              |
+| `npm run build`  | Production build                |
+| `npm run check`  | Typecheck + lint + format check |
+| `npm run format` | Format with Prettier            |
+
+## Money
+
+Every monetary value is a whole Naira integer (`300` = ₦300). No floating-point
+arithmetic is used for money. Prices are recomputed on the server at checkout
+and are never taken from the browser.
+
+## Placeholder data
+
+Per `AGENTS.md` §27, the following are **not confirmed** and are marked as
+placeholders in code:
+
+- All seed prices except Dodo Ikire (₦300 / ₦500 / ₦1,000, from the PRD)
+- Product descriptions and images
+- The Abeokuta delivery fee
+- Shop contact details
+
+Replace them before production use.
+
+## Documentation
+
+- `AGENTS.md` — agent operating manual
+- `PRD.md` — product requirements
+- `TRD.md` — technical requirements

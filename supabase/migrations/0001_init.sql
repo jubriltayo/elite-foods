@@ -248,11 +248,23 @@ comment on function public.create_order is
   'Atomically creates an order and its items. Call with server-validated values only.';
 
 -- Only the service role (server code) may create orders.
--- NOTE: the `anon` and `authenticated` roles are created by Supabase, not by
--- vanilla Postgres. This statement is therefore Supabase-specific and will fail
--- on a plain Postgres instance. That is intentional: this migration targets
--- Supabase only (TRD section 6).
-revoke execute on function public.create_order from public, anon, authenticated;
+--
+-- `anon` and `authenticated` exist on Supabase but not on a plain Postgres
+-- server, so revoke from them only when they are actually present. `public` is
+-- revoked unconditionally.
+revoke execute on function public.create_order from public;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke execute on function public.create_order from anon';
+  end if;
+
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    execute 'revoke execute on function public.create_order from authenticated';
+  end if;
+end;
+$$;
 
 -- =============================================================================
 -- Row Level Security (TRD section 8.1)
