@@ -29,6 +29,39 @@ export const DELIVERY_AREAS = {
 
 export type DeliveryAreaId = keyof typeof DELIVERY_AREAS;
 
+/** Narrows an untrusted string (e.g. a form field) to a known delivery area. */
+export function isDeliveryAreaId(value: string): value is DeliveryAreaId {
+  return value in DELIVERY_AREAS;
+}
+
+/**
+ * Product categories.
+ *
+ * These keys mirror the `category` check constraint on `public.products`
+ * (TRD section 6.2), so a value here is always a value the database accepts.
+ */
+export const PRODUCT_CATEGORIES = {
+  "fried-snacks": "Fried Snacks",
+  "nuts-and-grains": "Nuts and Grains",
+  drinks: "Drinks",
+} as const;
+
+export type ProductCategoryId = keyof typeof PRODUCT_CATEGORIES;
+
+export const PRODUCT_CATEGORY_IDS = Object.keys(
+  PRODUCT_CATEGORIES,
+) as ProductCategoryId[];
+
+/** Narrows an untrusted string (e.g. a search param) to a known category. */
+export function isProductCategory(value: string): value is ProductCategoryId {
+  return value in PRODUCT_CATEGORIES;
+}
+
+/** Human-readable category name, or the raw id as a fallback. */
+export function categoryLabel(id: string): string {
+  return isProductCategory(id) ? PRODUCT_CATEGORIES[id] : id;
+}
+
 export const DELIVERY_AREA_IDS = Object.keys(
   DELIVERY_AREAS,
 ) as DeliveryAreaId[];

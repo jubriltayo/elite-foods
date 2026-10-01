@@ -3,16 +3,20 @@
 Mobile-first ecommerce MVP for a Nigerian snacks and drinks shop. Browse →
 Cart → Google Login → Checkout → Pay on Delivery → Confirmation email.
 
-Status: **Phase 1 (foundation) complete.** Catalog, cart, auth, checkout,
-orders, email and admin are not built yet. See `AGENTS.md` §14 for the phase
-plan.
+Status: **customer purchase journey complete.** Catalog, cart, Google
+authentication, checkout, atomic order creation, Mailgun confirmation email and
+order history are built and verified against the live Supabase project.
+
+**Not built yet:** the admin dashboard (order status updates, product
+availability). See `AGENTS.md` §14 for the phase plan.
 
 ## Stack
 
 - Next.js 16 (App Router, Turbopack), TypeScript strict, Tailwind CSS v4
 - Supabase PostgreSQL (database only — **not** Supabase Auth)
+- Auth.js (next-auth v5) with the Google provider
 - Zod for validation
-- Mailgun for confirmation email (not implemented yet)
+- Mailgun for confirmation email (verified end-to-end: delivered)
 - Vercel for deployment
 
 Identity flow: Google Cloud Console → Google OAuth → Auth.js → Next.js session

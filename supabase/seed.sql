@@ -70,6 +70,12 @@ on conflict (slug) do nothing;
 --
 -- A product must have at least one valid variant (TRD section 6.3), so every
 -- product above gets at least one row here.
+--
+-- The `where not exists` guard makes this insert safe to re-run.
+-- product_variants has no unique constraint on (product_id, label) -- only a
+-- NOT NULL on label and a non-unique index -- so without this guard a second
+-- run would silently insert a duplicate variant for every row below instead of
+-- failing. Mirrors the `on conflict (slug) do nothing` style used above.
 insert into public.product_variants (product_id, label, price)
 select p.id, v.label, v.price
 from public.products p
@@ -106,7 +112,13 @@ join (values
 
   ('soy-milk-drink', 'Bottle', 450),
   ('soy-milk-drink', '1L', 850)
-) as v(slug, label, price) on v.slug = p.slug;
+) as v(slug, label, price) on v.slug = p.slug
+where not exists (
+  select 1
+  from public.product_variants existing
+  where existing.product_id = p.id
+    and existing.label = v.label
+);
 
 -- -----------------------------------------------------------------------------
 -- Availability demo
