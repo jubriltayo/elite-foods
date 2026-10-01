@@ -2,74 +2,72 @@ import Link from "next/link";
 import { SHOP } from "@/lib/config/business";
 
 /**
- * Site footer.
+ * Footer.
  *
- * Deep ink band with an orange rule, so the page ends on the same warm dark
- * note the dark scheme uses. Contact details live here in one place rather than
- * being restated per page.
+ * Light and warm, closing on cream rather than a dark band. The gradient rule
+ * is the one saturated moment, and it echoes the button so the page reads as a
+ * single system rather than a set of pages.
  */
 export function Footer() {
-  // `as const` keeps each href a literal so Next's typed routes accept it.
   const links = [
-    { href: "/shop", label: "Shop" },
-    { href: "/cart", label: "Cart" },
-    { href: "/orders", label: "My orders" },
-  ] as const;
+    { href: "/shop" as const, label: "Shop" },
+    { href: "/cart" as const, label: "Cart" },
+    { href: "/orders" as const, label: "My orders" },
+  ];
 
   return (
-    <footer className="band-surface mt-16 bg-band text-on-band">
-      <div className="h-1.5 w-full bg-orange" aria-hidden="true" />
+    <footer className="mt-24 border-t border-line bg-cream">
+      <div className="mx-auto w-full max-w-7xl px-5 py-14 sm:px-8">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <p className="font-display text-xl font-medium tracking-tight text-ink">
+              {SHOP.name}
+            </p>
+            <p className="mt-3 max-w-xs text-sm leading-relaxed text-ink-soft">
+              Snacks and drinks fried, roasted and blended in Abeokuta, then
+              packed and delivered to your door.
+            </p>
+          </div>
 
-      <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-3">
-        <div>
-          <p className="font-display text-2xl font-extrabold uppercase leading-none tracking-tight">
-            {SHOP.name}
-          </p>
-          <p className="mt-3 max-w-xs text-sm text-band-muted">
-            Nigerian snacks and drinks, packed fresh and delivered across
-            Abeokuta. Pay the rider when your order arrives.
-          </p>
-        </div>
+          <nav aria-label="Footer">
+            <p className="text-sm font-medium text-ink">Browse</p>
+            <ul className="mt-3 flex flex-col gap-2">
+              {links.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-sm text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-        <div className="text-sm">
-          <p className="font-bold uppercase tracking-wide text-band-accent">
-            Browse
-          </p>
-          <ul className="mt-3 flex flex-col gap-2">
-            {links.map((link) => (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  className="text-band-muted underline-offset-4 hover:text-on-band hover:underline"
-                >
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="text-sm">
-          <p className="font-bold uppercase tracking-wide text-band-accent">
-            Reach us
-          </p>
-          <address className="mt-3 flex flex-col gap-2 not-italic text-band-muted">
-            <a
-              href={`tel:${SHOP.phone.replace(/\s/g, "")}`}
-              className="underline-offset-4 hover:text-on-band hover:underline"
-            >
-              {SHOP.phone}
-            </a>
-            <a
-              href={`mailto:${SHOP.email}`}
-              className="break-all underline-offset-4 hover:text-on-band hover:underline"
-            >
-              {SHOP.email}
-            </a>
-            <span>{SHOP.address}</span>
-          </address>
+          <div>
+            <p className="text-sm font-medium text-ink">Reach us</p>
+            <address className="mt-3 flex flex-col gap-2 text-sm not-italic text-ink-soft">
+              <a
+                href={`tel:${SHOP.phone.replace(/\s/g, "")}`}
+                className="underline-offset-4 transition-colors hover:text-ink hover:underline"
+              >
+                {SHOP.phone}
+              </a>
+              <a
+                href={`mailto:${SHOP.email}`}
+                className="break-all underline-offset-4 transition-colors hover:text-ink hover:underline"
+              >
+                {SHOP.email}
+              </a>
+              <span>{SHOP.address}</span>
+            </address>
+          </div>
         </div>
       </div>
+
+      {/* The gradient rule as the closing gesture. */}
+      <div className="grad-warm h-1.5 w-full" aria-hidden="true" />
     </footer>
   );
 }

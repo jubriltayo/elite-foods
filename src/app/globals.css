@@ -1,182 +1,236 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   Elite Foods and Snacks — "Hot Pepper & Paper Sachet"
+   Elite Foods and Snacks — "Sachet & Mango"
    ==========================================================================
-   LIGHT IS THE PRIMARY THEME. It is a bright, warm paper ground (the colour of
-   a food-market counter at midday) with clean white product tiles sitting on
-   it, and red/orange used structurally rather than as trim: the announcement
-   bar is orange, the shopfront band, the shop header and the footer are red.
+   COLOUR IDENTITY: WHITE + RED + CREAM, with mango/coral as energy.
 
-   DARK IS AN INTENTIONAL ALTERNATE, NOT AN INVERSION. On a dark ground a
-   saturated red vibrates, so the ground becomes a warm red-brown charcoal and
-   the brand band becomes deep oxblood, keeping the same red/orange identity
-   rather than flipping light text onto a neutral near-black.
+   White is the page. The ground is clean white and cards are white on white,
+   separated by hairline edges and soft shadow rather than by a tinted
+   background, so the shop reads bright the moment it loads. Cream is reserved
+   for secondary sections and never becomes the page ground. Red is the primary
+   brand colour and does the work a brand colour should: primary actions,
+   selected states, badges and accents. Mango and coral are kept for gradients
+   and decorative energy, and never replace the red.
 
-   There is deliberately NO green. Availability, success and progress are all
-   expressed in red, orange and gold, which is what makes the shop read as one
-   brand instead of a default component kit.
+   There is deliberately no brown here. Text is deep charcoal, not chocolate;
+   shadows are neutral, not sepia; the art grounds are cream, not tan. The only
+   warm browns left in the system are inside the placeholder product
+   illustrations, where they stand in for the food itself.
 
    TOKEN ARCHITECTURE — read this before adding a colour
    -----------------------------------------------------
-   One token per colour cannot serve two jobs once a dark scheme exists, so
-   every brand colour is split by ROLE and the class name tells you the role:
+   One token per colour cannot serve two jobs once a dark scheme exists, so each
+   accent is split by ROLE and the class name tells you the role:
 
-     bg-*            a FILL. Pair it with the matching text-on-* label.
-     text-*-ink      brand colour as TEXT on the page or a section tint.
-                     Always >= 4.5:1 on paper/surface/cream in both schemes.
-     text-on-*       the label sitting ON a fill. Scheme-stable: a saturated
-                     fill keeps the same label in both schemes.
-     text-band-*     label on the brand band. Orange is unreadable on red, so
-                     the band gets its own accent tint instead.
-     border-edge     borders on interactive controls; needs >= 3:1 to be
-                     visible at all. border-line is for dividers only.
+     bg-*          a FILL. Pair it with the matching text-on-* label.
+     text-*-ink    an accent used as TEXT on the page. Always >= 4.5:1 on
+                   white, cream and sand in both schemes.
+     text-on-*     the label sitting ON a fill. Scheme-stable, because a warm
+                   fill keeps the same dark label in both schemes.
+     border-line   dividers. border-edge is for interactive controls and must
+                   clear 3:1 so a field's edge is actually visible.
 
-   Every ratio quoted below was verified numerically against these exact values.
+   Every ratio quoted here was verified numerically against these values.
    ========================================================================== */
 
 :root {
-  /* ---- Ground ----------------------------------------------------------- */
-  /* Bright warm paper, not beige: the shop should feel sunlit and open. */
-  --paper: #fffbf4;
-  /* Cards sit on the paper as clean white tiles, so they read as product. */
-  --surface: #ffffff;
-  --cream: #fff1e1; /* section tint */
-  --warm: #ffe2c4; /* stronger tint for empty states and promos */
-  --ink: #2a140c; /* warm near-black; 16.4:1 on paper */
-  --ink-soft: #7a5a48; /* 5.8:1 on paper */
-  --line: #f0dfc9; /* dividers only */
-  --edge: #8a705c; /* control borders, 4.3:1 on paper */
+  /* ---- Grounds: white dominant, cream supporting ------------------------ */
+  /* The page is white. Only a trace of warmth, so it is not clinical. */
+  --paper: #fffdfc;
+  --surface: #ffffff; /* cards are white on white, lifted by edge + shadow */
+  --cream: #fdf5ea; /* secondary sections */
+  --sand: #f7ead9; /* decorative grounds, well clear of tan */
+
+  --ink: #1c1a1b; /* deep charcoal, NOT chocolate: 17.3:1 on white */
+  --ink-soft: #676163; /* neutral grey, 6.1:1 on white */
+  --line: #efe9e3; /* dividers only */
+  --edge: #948c86; /* control borders, 3.3:1 on white */
 
   /* ---- Red: the primary brand ------------------------------------------- */
-  --brand: #dc1a10; /* fill; white label 5.0:1 */
-  --brand-hover: #b31410; /* fill hover; white label 7.6:1 */
-  --brand-ink: #b31410; /* as text on paper 7.9:1 */
-  --brand-tint: #fde6e2;
+  --red: #a81c29; /* fill; white label 7.4:1 */
+  --red-hover: #8c1622;
+  --red-ink: #a81c29; /* as text on white 7.4:1, on cream 6.7:1 */
+  --red-tint: #fbeaec;
 
-  /* ---- Orange: promotions, and the primary action in the dark scheme ---- */
-  --orange: #ff7a1a; /* fill; near-black label 6.7:1 */
-  --orange-hover: #ff9445; /* lighter, so the dark label only improves */
-  --orange-ink: #c24e00; /* as text on paper 4.5:1 */
-  --orange-tint: #ffeeda;
+  /* ---- Mango and coral: energy ------------------------------------------ */
+  --mango: #f7a03c; /* fill; charcoal label 8.0:1 */
+  --mango-ink: #a85d0e; /* as text on white 5.0:1 */
+  --mango-tint: #fdeedc;
 
-  --gold: #f5b301; /* fill; near-black label 10:1 */
+  --coral: #f2674a; /* fill; charcoal label 5.2:1 */
+  --coral-ink: #c43a20; /* as text on white 5.3:1 */
+  --coral-tint: #ffe4dc;
 
-  /* ---- Sold-out / destructive -------------------------------------------- */
-  --berry: #a8103f; /* fill; white label 7.5:1 */
-  --berry-ink: #a8103f; /* as text on paper 7.4:1 */
-  --berry-tint: #fce6ee;
+  --peach: #ffe0cc; /* gradient partner and soft tint */
+  --peach-tint: #fff2ea;
 
-  /* ---- The brand band ---------------------------------------------------- */
-  /* Light: a rich chilli red. Dark: deep oxblood. Neither is a dark neutral. */
-  --band: #b31410;
-  --on-band: #ffffff; /* 7.6:1 on the light band */
-  --band-accent: #ffd9a8; /* 6.3:1 on band: orange itself would be unreadable */
-  --band-muted: #f5cfc4; /* 5.4:1 on band */
+  /* ---- Functional --------------------------------------------------------- */
+  /* Destructive and form errors. A deeper crimson than the brand red, so the
+     two never read as the same thing in the admin tools. */
+  --rose: #b0202f; /* fill; white label 6.0:1 */
+  --rose-ink: #a81c29; /* as text on white 7.4:1 */
+  --rose-tint: #fbeaec;
 
-  /* ---- Focus ------------------------------------------------------------- */
-  --focus: #b31410; /* 7.9:1 on paper */
+  /* Availability and "saved". Semantic rather than brand: green keeps its
+     conventional meaning, so it stays, but only in small doses. */
+  --matcha: #3f6b45;
+  --matcha-ink: #3f6b45; /* as text on white 5.7:1 */
+  --matcha-tint: #e4efe2;
 
   /* ---- Labels that sit ON a fill (scheme-stable) -------------------------- */
-  --on-brand: #ffffff;
-  --on-orange: #241009;
-  --on-gold: #241009;
-  --on-berry: #ffffff;
-  --on-surface: #2a140c; /* text on a white card */
+  --on-red: #ffffff;
+  --on-warm: #241a1c; /* charcoal: the label on mango, coral and gold fills */
+  --on-rose: #ffffff;
+  --on-matcha: #ffffff;
+  --on-surface: #1c1a1b; /* text on a white card */
 
-  /* ---- Type -------------------------------------------------------------- */
-  --font-display:
-    var(--font-display-face), ui-sans-serif, system-ui, sans-serif;
-  --font-body: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  /* ---- Gradients: the mango -> coral energy ------------------------------ */
+  --grad-warm: linear-gradient(135deg, #ffc978 0%, #f7a03c 42%, #f2674a 100%);
+  --grad-peach: linear-gradient(150deg, #fff6ee 0%, #ffe0cc 100%);
+  --grad-mango: linear-gradient(140deg, #ffe6bc 0%, #f7a03c 100%);
+
+  /* ---- Focus -------------------------------------------------------------- */
+  --focus: #a81c29; /* 7.4:1 on white, 6.7:1 on cream */
+
+  /* ---- Type --------------------------------------------------------------- */
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Warm red-brown charcoal, deliberately tinted toward the brand rather
-       than the neutral grey-green an inversion would produce. */
-    --paper: #17100c;
-    --surface: #201711;
-    --cream: #251a14;
-    --warm: #2e2019;
-    --ink: #f9f0e8;
-    --ink-soft: #c3ac9f;
-    --line: #3e2c23;
-    --edge: #93796a;
+/* ==========================================================================
+   DARK THEME - OPT-IN ONLY.
 
-    /* Brightened as TEXT, but kept deep enough to stay a white-label fill. */
-    --brand: #d42a18; /* fill; white label 5.1:1 */
-    --brand-hover: #b31f10; /* deeper, as in light, to keep white above 4.5:1 */
-    --brand-ink: #ff8a7a; /* as text on paper 8.3:1 */
-    --brand-tint: #3a1512;
+   This is deliberately NOT a `prefers-color-scheme` media query. The OS
+   preference must not decide the theme: light is the Elite Foods default, and
+   dark is only applied when the visitor explicitly asks for it. The attribute
+   is set on <html> before first paint by the inline script in layout.tsx, and
+   is omitted or "light" for a first-time visitor.
 
-    --orange: #ff9a3d; /* fill; near-black label 8.2:1 */
-    --orange-hover: #ffb066;
-    --orange-ink: #ffb968; /* as text on paper 9.4:1 */
-    --orange-tint: #3a2413;
+   Light lives on :root above and is therefore always the base, regardless of
+   what the operating system is set to.
+   ========================================================================== */
+[data-theme="dark"] {
+  --paper: #1a1718;
+  --surface: #221e20;
+  --cream: #2a2527;
+  --sand: #332c2d;
 
-    --gold: #ffc94d;
-    --berry: #a8103f;
-    --berry-ink: #ff8fa8;
-    --berry-tint: #3a1020;
+  --ink: #f8f4f3;
+  --ink-soft: #beb5b7;
+  --line: #3a3335;
+  --edge: #7e7577;
 
-    /* Deep oxblood: the same red identity, read as a dark brand surface. */
-    --band: #33120f;
-    --on-band: #fff3ea; /* 15.5:1 */
-    --band-accent: #ffbe7a; /* 10.6:1 */
-    --band-muted: #e7c7bc; /* 9.9:1 */
+  --red: #d22f3c; /* fill; white label 5.0:1 */
+  --red-hover: #b82430;
+  --red-ink: #ff8a93; /* as text on the dark ground */
+  --red-tint: #3a1a1f;
 
-    --focus: #ff9a3d; /* 8.2:1 on the dark ground */
+  --mango: #e8a15c;
+  --mango-ink: #f5be80;
+  --mango-tint: #3a2a18;
 
-    --on-surface: #f9f0e8;
-  }
+  --coral: #e8734f;
+  --coral-ink: #f2927c;
+  --coral-tint: #3d2019;
+
+  --peach: #6e4a3c;
+  --peach-tint: #2e2220;
+
+  --rose: #c4404f;
+  --rose-ink: #f08a95;
+  --rose-tint: #3a1c22;
+
+  --matcha: #4e7d55;
+  --matcha-ink: #9cc7a4;
+  --matcha-tint: #1e2f22;
+
+  --on-surface: #f8f4f3;
+
+  --grad-warm: linear-gradient(135deg, #f5be80 0%, #e8a15c 45%, #e8734f 100%);
+  --grad-peach: linear-gradient(150deg, #2e2220 0%, #4a3226 100%);
+  --grad-mango: linear-gradient(140deg, #6e4a2c 0%, #e8a15c 100%);
+
+  --focus: #ff8a93; /* 8.4:1 on the dark ground */
 }
 
 @theme inline {
-  /* Ground */
+  /* Grounds */
   --color-paper: var(--paper);
   --color-surface: var(--surface);
   --color-cream: var(--cream);
-  --color-warm: var(--warm);
+  --color-sand: var(--sand);
+
+  /* Text */
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-line: var(--line);
   --color-edge: var(--edge);
 
-  /* Brand as text on the page */
-  --color-brand-ink: var(--brand-ink);
-  --color-orange-ink: var(--orange-ink);
-  --color-berry-ink: var(--berry-ink);
+  /* Accents as text on the page */
+  --color-red-ink: var(--red-ink);
+  --color-mango-ink: var(--mango-ink);
+  --color-coral-ink: var(--coral-ink);
+  --color-rose-ink: var(--rose-ink);
+  --color-matcha-ink: var(--matcha-ink);
 
-  /* Fills */
-  --color-brand: var(--brand);
-  --color-brand-hover: var(--brand-hover);
-  --color-brand-tint: var(--brand-tint);
-  --color-orange: var(--orange);
-  --color-orange-hover: var(--orange-hover);
-  --color-orange-tint: var(--orange-tint);
-  --color-gold: var(--gold);
-  --color-berry: var(--berry);
-  --color-berry-tint: var(--berry-tint);
-  --color-band: var(--band);
+  /* Accent fills */
+  --color-red: var(--red);
+  --color-red-hover: var(--red-hover);
+  --color-red-tint: var(--red-tint);
+  --color-mango: var(--mango);
+  --color-mango-tint: var(--mango-tint);
+  --color-coral: var(--coral);
+  --color-coral-tint: var(--coral-tint);
+  --color-peach: var(--peach);
+  --color-peach-tint: var(--peach-tint);
+  --color-rose: var(--rose);
+  --color-rose-tint: var(--rose-tint);
+  --color-matcha: var(--matcha);
+  --color-matcha-tint: var(--matcha-tint);
 
-  /* Labels that sit on a fill or a surface */
-  --color-on-brand: var(--on-brand);
-  --color-on-orange: var(--on-orange);
-  --color-on-gold: var(--on-gold);
-  --color-on-berry: var(--on-berry);
+  /* Labels that sit on a fill */
+  --color-on-red: var(--on-red);
+  --color-on-warm: var(--on-warm);
+  --color-on-rose: var(--on-rose);
+  --color-on-matcha: var(--on-matcha);
   --color-on-surface: var(--on-surface);
-  --color-on-band: var(--on-band);
-  --color-band-accent: var(--band-accent);
-  --color-band-muted: var(--band-muted);
 
   --font-display: var(--font-display);
   --font-sans: var(--font-body);
 
-  /* A clear radius scale: soft cards, pill buttons, gently rounded inputs.
-     Each has a job, so radius still carries meaning. */
-  --radius-card: 20px;
-  --radius-media: 16px;
-  --radius-input: 14px;
+  /* ------------------------------------------------------------------
+     Compatibility aliases.
+
+     The pages other than the homepage still reference the previous token
+     names. Rather than edit them, the old names map onto the new palette so
+     every route keeps rendering. `band` now resolves to the brand red, and
+     its accent is the bright yellow the Elite Foods reference sets against
+     its red.
+     ------------------------------------------------------------------ */
+  --color-brand: var(--red);
+  --color-brand-hover: #8c1622;
+  --color-brand-tint: var(--red-tint);
+  --color-brand-ink: var(--red-ink);
+  --color-on-brand: var(--on-red);
+  --color-orange: var(--mango);
+  --color-orange-hover: #dd8a24;
+  --color-orange-tint: var(--mango-tint);
+  --color-orange-ink: var(--mango-ink);
+  --color-on-orange: var(--on-warm);
+  --color-berry: var(--rose);
+  --color-berry-tint: var(--rose-tint);
+  --color-berry-ink: var(--rose-ink);
+  --color-on-berry: var(--on-rose);
+  --color-band: var(--red);
+  --color-on-band: var(--on-red);
+  --color-band-accent: #ffd400;
+  --color-band-muted: #f6dcdc;
+
+  /* Radius carries meaning: soft cards, pill chips, gently rounded media. */
+  --radius-card: 28px;
+  --radius-media: 20px;
+  --radius-input: 16px;
 }
 
 /* ==========================================================================
@@ -189,25 +243,33 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Tells the browser which scheme is active so native UI (scrollbars, select
+     popups, form controls) matches the chosen theme rather than the OS. */
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
-  line-height: 1.6;
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
 }
 
-/* The display face is condensed: it needs negative tracking to stay tight, and
-   much tighter again at the largest sizes. */
+/* Outfit is geometric, so it needs negative tracking to feel refined rather
+   than loose. Weight stays LIGHT: the personality comes from scale and air,
+   not from black. */
 h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-weight: 800;
-  line-height: 0.95;
-  letter-spacing: -0.01em;
+  font-weight: 300;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
   text-wrap: balance;
 }
 
@@ -216,7 +278,7 @@ p {
 }
 
 .prose-measure {
-  max-width: 34rem;
+  max-width: 36rem;
 }
 
 .tabular {
@@ -228,63 +290,74 @@ p {
    ========================================================================== */
 
 :focus-visible {
-  outline: 3px solid var(--focus);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
-  border-radius: 4px;
-}
-
-/* The brand band is saturated, so a red focus ring would disappear on it. Band
-   surfaces get the band's own light label as the ring instead. */
-.band-surface :focus-visible {
-  outline-color: var(--on-band);
+  border-radius: 6px;
 }
 
 /* ==========================================================================
    Components
    ========================================================================== */
 
-/* Warm elevation, tinted toward the brand rather than neutral grey. */
+/* Depth is NEUTRAL and layered, never sepia and never the flat grey
+   rgba(0,0,0,.1) that makes a page read as a component kit. A tight contact
+   shadow plus a wide soft bloom. */
 .lift {
   box-shadow:
-    0 1px 2px rgba(74, 26, 12, 0.06),
-    0 8px 24px -12px rgba(74, 26, 12, 0.16);
+    0 1px 2px rgba(28, 24, 25, 0.04),
+    0 10px 30px -14px rgba(28, 24, 25, 0.14);
 }
 
 .lift-lg {
   box-shadow:
-    0 2px 4px rgba(74, 26, 12, 0.07),
-    0 18px 40px -18px rgba(74, 26, 12, 0.24);
+    0 2px 6px rgba(28, 24, 25, 0.05),
+    0 26px 60px -24px rgba(28, 24, 25, 0.22);
 }
 
 @media (hover: hover) {
   .lift:hover {
     box-shadow:
-      0 2px 4px rgba(74, 26, 12, 0.08),
-      0 16px 32px -14px rgba(74, 26, 12, 0.2);
+      0 2px 4px rgba(28, 24, 25, 0.05),
+      0 18px 40px -18px rgba(28, 24, 25, 0.18);
   }
 }
 
-/* Circular quick-add action, as in the references. */
+/* Gradient-filled surfaces. */
+.grad-warm {
+  background-image: var(--grad-warm);
+}
+
+.grad-peach {
+  background-image: var(--grad-peach);
+}
+
+.grad-mango {
+  background-image: var(--grad-mango);
+}
+
+/* Circular quick-add: a soft press rather than a hard scale. */
 .quick-add {
-  transition: transform 0.15s ease;
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.18s ease;
 }
 
 .quick-add:hover {
-  transform: scale(1.06);
+  transform: translateY(-2px);
 }
 
 .quick-add:active {
-  transform: scale(0.94);
+  transform: translateY(0) scale(0.96);
 }
 
-/* Diagonal hatch marks a sold-out product without relying on colour. */
+/* Marks a sold-out product without relying on colour alone. */
 .hatch {
   background-image: repeating-linear-gradient(
     -45deg,
     transparent,
-    transparent 8px,
-    color-mix(in srgb, var(--ink) 12%, transparent) 8px,
-    color-mix(in srgb, var(--ink) 12%, transparent) 16px
+    transparent 9px,
+    color-mix(in srgb, var(--ink) 9%, transparent) 9px,
+    color-mix(in srgb, var(--ink) 9%, transparent) 18px
   );
 }
 
@@ -292,10 +365,11 @@ p {
    Motion
    ========================================================================== */
 
+/* One orchestrated moment on the page: the hero headline. */
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
@@ -303,9 +377,12 @@ p {
   }
 }
 
-/* The single automatic moment: the hero headline. */
 .rise {
-  animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.rise-late {
+  animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -318,7 +395,8 @@ p {
     scroll-behavior: auto !important;
   }
 
-  .rise {
+  .rise,
+  .rise-late {
     animation: none;
   }
 }
@@ -335,12 +413,12 @@ p {
 }
 
 .skip-link:focus {
-  left: 0.75rem;
-  top: 0.75rem;
-  padding: 0.75rem 1.125rem;
-  background: var(--brand);
-  color: var(--on-brand);
-  border-radius: var(--radius-input);
+  left: 1rem;
+  top: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--red);
+  color: var(--on-red);
+  border-radius: 999px;
 }
 
 .sr-only {
@@ -358,11 +436,11 @@ p {
 /* Horizontal category rail, scrollable on a phone. */
 .rail {
   display: flex;
-  gap: 1rem;
+  gap: 1.25rem;
   overflow-x: auto;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
-  padding-bottom: 0.25rem;
+  padding-bottom: 0.5rem;
 }
 
 .rail::-webkit-scrollbar {

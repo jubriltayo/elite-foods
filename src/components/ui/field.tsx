@@ -4,17 +4,13 @@ import { cn } from "@/lib/cn";
 /**
  * Form field primitives.
  *
- * Labels sit above the control and stay visible; placeholders are examples
- * only. Every control carries a real label so it is reachable by keyboard and
- * announced by a screen reader.
- *
- * Control borders use `border-edge`, not `border-line`. A divider tint is far
- * too faint to show where a field begins (it measured 1.3:1 against the page);
- * `border-edge` clears the 3:1 that WCAG asks of a control boundary.
+ * Controls are quiet by design: a soft hairline edge that clears 3:1 against
+ * every ground, and a warm accent on focus. The strong colour is reserved for
+ * the submit button, so a form never looks like a pile of alerts.
  */
 
 const control =
-  "w-full rounded-input border-2 border-edge bg-surface px-4 py-3 text-base text-ink transition-colors placeholder:text-ink-soft focus:border-orange disabled:opacity-50";
+  "w-full rounded-input border border-edge bg-surface px-4 py-3 text-base text-ink transition-colors placeholder:text-ink-soft/70 focus:border-coral disabled:opacity-55";
 
 export function Field({
   label,
@@ -32,14 +28,14 @@ export function Field({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={htmlFor} className="text-sm font-bold text-ink">
+    <div className={cn("flex flex-col gap-2", className)}>
+      <label htmlFor={htmlFor} className="text-sm font-medium text-ink">
         {label}
       </label>
       {children}
       {hint && !error && <p className="text-xs text-ink-soft">{hint}</p>}
       {error && (
-        <p role="alert" className="text-xs font-bold text-berry-ink">
+        <p role="alert" className="text-xs font-medium text-rose-ink">
           {error}
         </p>
       )}
@@ -60,20 +56,37 @@ export function Select({ className, ...rest }: ComponentProps<"select">) {
 }
 
 /**
- * Status and promotional chips: the reference language's badge blocks.
- *
- * Each tone pairs a fill with its `text-on-*` label rather than a fixed white
- * or the flipping `--ink`, so every chip stays legible in both schemes.
+ * Status chips. Tinted rather than solid, so a card can carry several without
+ * shouting. Warm tones carry espresso; the rose sold-out tone carries white.
  */
-export type ChipTone = "brand" | "orange" | "gold" | "neutral" | "berry";
+export type ChipTone =
+  | "red"
+  | "mango"
+  | "coral"
+  | "matcha"
+  | "rose"
+  | "neutral"
+  | "ink"
+  // Aliases for the pages outside this redesign.
+  | "brand"
+  | "orange"
+  | "gold"
+  | "berry";
 
 const chipTones: Record<ChipTone, string> = {
-  brand: "bg-brand text-on-brand",
-  orange: "bg-orange text-on-orange",
-  gold: "bg-gold text-on-gold",
-
+  red: "bg-red text-on-red",
+  mango: "bg-mango-tint text-mango-ink",
+  coral: "bg-coral-tint text-coral-ink",
+  matcha: "bg-matcha-tint text-matcha-ink",
+  rose: "bg-rose text-on-rose",
   neutral: "bg-cream text-ink-soft",
-  berry: "bg-berry text-on-berry",
+  ink: "bg-ink text-paper",
+  // Aliases for the pages outside this redesign, so a second visual style
+  // does not survive under a legacy name.
+  brand: "bg-red-tint text-red-ink",
+  orange: "bg-mango-tint text-mango-ink",
+  gold: "bg-mango-tint text-mango-ink",
+  berry: "bg-rose text-on-rose",
 };
 
 export function Chip({
@@ -88,7 +101,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold",
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold",
         chipTones[tone],
         className,
       )}
@@ -98,7 +111,7 @@ export function Chip({
   );
 }
 
-/** Section heading: display face, with an optional accented trailing word. */
+/** Section heading. Light weight: the scale and air carry it, not the ink. */
 export function SectionTitle({
   children,
   id,
@@ -112,7 +125,7 @@ export function SectionTitle({
     <h2
       id={id}
       className={cn(
-        "font-display text-3xl font-extrabold uppercase tracking-tight text-ink sm:text-4xl",
+        "font-display text-3xl font-light tracking-tight text-ink sm:text-4xl",
         className,
       )}
     >
