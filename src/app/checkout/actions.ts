@@ -49,6 +49,10 @@ export async function placeOrder(
     deliveryAddress: formData.get("deliveryAddress"),
     note: formData.get("note") ?? undefined,
     idempotencyKey: formData.get("idempotencyKey") || undefined,
+    // The customer chooses how to pay. This is a choice between two known
+    // methods, not an instruction about money: pricing, totals and status stay
+    // server-side (AGENTS.md section 5).
+    paymentMethod: formData.get("paymentMethod"),
   });
 
   if (!parsed.success) {

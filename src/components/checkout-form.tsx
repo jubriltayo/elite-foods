@@ -6,14 +6,18 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useCart } from "@/context/cart-context";
 import {
+  BANK_TRANSFER,
   DELIVERY_AREAS,
   DELIVERY_AREA_IDS,
   isDeliveryAreaId,
+  PAYMENT_METHOD,
+  PAYMENT_METHODS,
 } from "@/lib/config/business";
 import { formatNaira, lineTotal } from "@/lib/format";
 import { deliveryFeeFor } from "@/lib/pricing";
 import type { Product } from "@/lib/products";
 import { productImage } from "@/lib/product-images";
+import { cn } from "@/lib/cn";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { placeOrder, type PlaceOrderResult } from "@/app/checkout/actions";
@@ -47,6 +51,11 @@ export function CheckoutForm({
   const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const [area, setArea] = useState<string>(DELIVERY_AREA_IDS[0] ?? "");
+  // Defaults to the method the MVP shipped with, so the form still validates
+  // for anyone whose browser restores a previous state oddly.
+  const [paymentMethod, setPaymentMethod] = useState<string>(
+    PAYMENT_METHOD.payOnDelivery,
+  );
   const selectedArea = isDeliveryAreaId(area) ? area : undefined;
 
   // Resolve cart ids against the server-rendered catalog.
@@ -106,7 +115,7 @@ export function CheckoutForm({
 
   if (items.length === 0) {
     return (
-      <div className="mt-8 rounded-card border-2 border-dashed border-line bg-cream p-8 text-center">
+      <div className="mt-8 rounded-card border-2 border-dashed border-edge bg-cream p-8 text-center">
         <p className="font-display text-2xl font-extrabold uppercase text-on-orange">
           Nothing to check out
         </p>
@@ -131,7 +140,7 @@ export function CheckoutForm({
       <div className="flex flex-col gap-6">
         <section
           aria-labelledby="items-heading"
-          className="rounded-card border border-line bg-surface p-5 lift"
+          className="rounded-card border border-card-edge bg-surface p-5 lift"
         >
           <h2
             id="items-heading"
@@ -180,7 +189,7 @@ export function CheckoutForm({
 
         <section
           aria-labelledby="details-heading"
-          className="rounded-card border border-line bg-surface p-5 lift"
+          className="rounded-card border border-card-edge bg-surface p-5 lift"
         >
           <h2
             id="details-heading"
@@ -272,26 +281,78 @@ export function CheckoutForm({
           </div>
         </section>
 
+        {/*
+          Payment choice. This is a real selection rather than a hidden input:
+          the customer picks a method and it is validated server-side against
+          the shared enum. Choosing a method never changes the total, which is
+          still computed from the database.
+        */}
         <section
           aria-labelledby="payment-heading"
-          className="rounded-card border-2 border-ink bg-orange p-5"
+          className="rounded-card border border-card-edge bg-surface p-5"
         >
           <h2
             id="payment-heading"
-            className="font-display text-2xl font-extrabold uppercase text-on-orange"
+            className="font-display text-2xl font-extrabold uppercase text-ink"
           >
-            Payment
+            How would you like to pay?
           </h2>
-          <p className="mt-2 text-sm text-on-orange/80">
-            <span className="font-bold text-on-orange">Pay on delivery.</span>{" "}
-            Keep your change ready. The rider will collect{" "}
-            <span className="tabular font-bold text-on-orange">
-              {formatNaira(subtotal + fee)}
-            </span>{" "}
-            when your order arrives.
-          </p>
-          {/* Sent so the server can assert the MVP payment method. */}
-          <input type="hidden" name="paymentMethod" value="pay_on_delivery" />
+
+          <fieldset className="mt-4 flex flex-col gap-3">
+            <legend className="sr-only">Payment method</legend>
+
+            {PAYMENT_METHODS.map((method) => {
+              const active = method === paymentMethod;
+              const Field_ = PAYMENT_METHOD_COPY[method];
+
+              return (
+                <label
+                  key={method}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-input border p-4 transition-colors",
+                    active
+                      ? "border-red bg-red-tint"
+                      : "border-edge bg-surface hover:border-ink",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value={method}
+                    checked={active}
+                    onChange={() => setPaymentMethod(method)}
+                    className="mt-0.5 size-4 shrink-0 accent-[var(--red)]"
+                  />
+                  <span className="min-w-0">
+                    <span
+                      className={cn(
+                        "block text-sm font-bold",
+                        active ? "text-red-ink" : "text-ink",
+                      )}
+                    >
+                      {Field_.title}
+                    </span>
+                    <span className="mt-1 block text-xs leading-relaxed text-ink-soft">
+                      {Field_.body}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </fieldset>
+
+          {paymentMethod === PAYMENT_METHOD.payOnDelivery ? (
+            <p className="mt-4 rounded-input bg-orange-tint p-4 text-sm text-ink">
+              <span className="font-bold">Pay on delivery.</span> Keep your
+              change ready. The rider will collect{" "}
+              <span className="tabular font-bold">
+                {formatNaira(subtotal + fee)}
+              </span>{" "}
+              when your order arrives.
+            </p>
+          ) : (
+            <BankTransferPanel total={subtotal + fee} />
+          )}
         </section>
 
         {state?.ok === false && state.formError && (
@@ -355,5 +416,101 @@ export function CheckoutForm({
         </div>
       </aside>
     </form>
+  );
+}
+
+/**
+ * Copy for each payment choice, keyed by the shared enum so a new method cannot
+ * be added without saying what it means.
+ */
+const PAYMENT_METHOD_COPY: Record<string, { title: string; body: string }> = {
+  [PAYMENT_METHOD.payOnDelivery]: {
+    title: "Pay on delivery",
+    body: "Pay the rider in cash when your order arrives.",
+  },
+  [PAYMENT_METHOD.bankTransfer]: {
+    title: "Bank transfer",
+    body: "Transfer to our account and we confirm before dispatch.",
+  },
+};
+
+/**
+ * Bank transfer instructions.
+ *
+ * The details come from BANK_TRANSFER in lib/config/business.ts, which still
+ * holds clearly marked placeholders (AGENTS.md section 27). The placeholder
+ * bank name is surfaced as a warning so the shop cannot quietly take a payment
+ * against an account that does not exist.
+ *
+ * A bank-transfer order stays UNPAID until an admin verifies it by hand. Nothing
+ * here marks it as received.
+ */
+function BankTransferPanel({ total }: { total: number }) {
+  const isPlaceholder = BANK_TRANSFER.bankName.startsWith("PLACEHOLDER");
+
+  return (
+    <div className="mt-4 rounded-input border border-card-edge bg-cream p-4">
+      <p className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-sm font-bold text-ink">Transfer this amount</span>
+        <span className="tabular font-display text-xl font-extrabold text-red-ink">
+          {formatNaira(total)}
+        </span>
+      </p>
+
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Detail label="Bank name" value={BANK_TRANSFER.bankName} />
+        <Detail label="Account name" value={BANK_TRANSFER.accountName} />
+        <Detail
+          label="Account number"
+          value={BANK_TRANSFER.accountNumber}
+          mono
+        />
+      </dl>
+
+      <p className="mt-4 text-xs leading-relaxed text-ink-soft">
+        {BANK_TRANSFER.instructions}
+      </p>
+
+      <p className="mt-3 text-xs leading-relaxed text-ink-soft">
+        Your order stays unpaid until we confirm the transfer has reached us.
+      </p>
+
+      {isPlaceholder && (
+        <p
+          role="status"
+          className="mt-4 rounded-input border border-mango-ink bg-orange-tint p-3 text-xs font-bold text-ink"
+        >
+          Bank details are not configured yet. Please choose pay on delivery
+          until the shop adds its account details.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** One labelled bank detail. The value wraps rather than overflowing. */
+function Detail({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs font-bold uppercase tracking-wide text-ink-soft">
+        {label}
+      </dt>
+      <dd
+        className={cn(
+          "mt-1 break-words text-sm font-medium text-ink",
+          mono && "tabular",
+        )}
+      >
+        {value}
+      </dd>
+    </div>
   );
 }

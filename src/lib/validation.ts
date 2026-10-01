@@ -7,7 +7,11 @@
  */
 
 import { z } from "zod";
-import { DELIVERY_AREA_IDS, PRODUCT_CATEGORY_IDS } from "@/lib/config/business";
+import {
+  DELIVERY_AREA_IDS,
+  PAYMENT_METHODS,
+  PRODUCT_CATEGORY_IDS,
+} from "@/lib/config/business";
 
 /** Order statuses, mirrored by the database check constraint (TRD section 12). */
 export const ORDER_STATUSES = [
@@ -25,6 +29,19 @@ export type OrderStatus = z.infer<typeof orderStatusSchema>;
 export const PAYMENT_STATUSES = ["unpaid", "paid"] as const;
 export const paymentStatusSchema = z.enum(PAYMENT_STATUSES);
 export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
+
+/**
+ * Payment methods, derived from the shared list in lib/config/business.ts rather
+ * than restated here, so the form, this schema and the database constraint
+ * cannot drift apart.
+ *
+ * The browser may pick the method, but only within this set: an unknown value
+ * is rejected rather than silently defaulted.
+ */
+export const paymentMethodSchema = z.enum(PAYMENT_METHODS, {
+  message: "Choose a payment method",
+});
+export type PaymentMethodInput = z.infer<typeof paymentMethodSchema>;
 
 /**
  * Nigerian phone numbers, e.g. 08012345678 or +2348012345678.
@@ -86,6 +103,7 @@ export const checkoutSchema = z.object({
     .optional()
     .or(z.literal("")),
   idempotencyKey: z.uuid().optional(),
+  paymentMethod: paymentMethodSchema,
 });
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;

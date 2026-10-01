@@ -44,7 +44,7 @@ export function ProductAvailabilityToggle({
         className={`rounded-full border-2 px-4 py-2 text-sm font-bold transition-colors disabled:opacity-50 ${
           isAvailable
             ? "border-berry text-berry-ink hover:bg-berry-tint"
-            : "border-brand bg-brand text-on-brand hover:bg-brand-hover"
+            : "bg-brand text-on-brand hover:bg-brand-hover"
         }`}
       >
         {pending

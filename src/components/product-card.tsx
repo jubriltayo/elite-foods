@@ -51,7 +51,7 @@ export function ProductCard({
   }
 
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-card bg-surface lift">
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-card border border-card-edge bg-surface lift">
       <Link
         href={`/shop/${product.slug}`}
         tabIndex={-1}

@@ -77,10 +77,72 @@ export const SHOP = {
   address: "Abeokuta, Ogun State, Nigeria",
 } as const;
 
-/** Payment methods permitted by the MVP (TRD section 12). */
+/**
+ * Payment methods offered at checkout.
+ *
+ * This is the single source of truth for the payment method. The Zod schema in
+ * `lib/validation.ts` is derived from these values rather than restating them,
+ * so the form, the server action, the database constraint and every display
+ * surface cannot drift apart.
+ */
 export const PAYMENT_METHOD = {
   payOnDelivery: "pay_on_delivery",
+  bankTransfer: "bank_transfer",
 } as const;
+
+/** Ordered list, for rendering the choice and validating a submitted value. */
+export const PAYMENT_METHODS = [
+  PAYMENT_METHOD.payOnDelivery,
+  PAYMENT_METHOD.bankTransfer,
+] as const;
 
 export type PaymentMethod =
   (typeof PAYMENT_METHOD)[keyof typeof PAYMENT_METHOD];
+
+/** Narrows an untrusted value (e.g. a form field) to a known payment method. */
+export function isPaymentMethod(value: unknown): value is PaymentMethod {
+  return (
+    typeof value === "string" &&
+    PAYMENT_METHODS.includes(value as PaymentMethod)
+  );
+}
+
+/** Customer-facing label for a stored payment method. */
+export function paymentMethodLabel(method: string): string {
+  switch (method) {
+    case PAYMENT_METHOD.bankTransfer:
+      return "Bank transfer";
+    case PAYMENT_METHOD.payOnDelivery:
+      return "Pay on delivery";
+    default:
+      // Never surface a raw stored value to a customer; an unknown method is
+      // still shown as something the shop can act on.
+      return "Payment on order";
+  }
+}
+
+/**
+ * Bank transfer details.
+ *
+ * PLACEHOLDER VALUES - NOT REAL
+ * ------------------------------
+ * Per AGENTS.md section 27 the Elite Foods bank details are an open business
+ * decision and have NOT been supplied. These values are deliberately obvious
+ * placeholders so nobody can mistake them for real banking details and pay the
+ * wrong account.
+ *
+ * Before launch, replace every value below with the confirmed details from the
+ * business. Nothing else needs to change: the checkout, confirmation, order
+ * history and admin views all read from here.
+ */
+export const BANK_TRANSFER = {
+  bankName: "PLACEHOLDER - bank name not yet confirmed",
+  accountName: "PLACEHOLDER - account name not yet confirmed",
+  accountNumber: "0000000000",
+  /**
+   * What the customer should put in the transfer reference. Optional, so an
+   * empty string simply omits the instruction.
+   */
+  instructions:
+    "Transfer the exact amount using your bank app, then enter your order number in the transfer reference so we can match it. We confirm receipt before dispatch.",
+} as const;

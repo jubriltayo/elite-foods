@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { OrderStatusControl } from "@/components/admin/order-status-control";
+import { PageBand } from "@/components/page-band";
 import { ProductAvailabilityToggle } from "@/components/admin/product-availability-toggle";
 import { ProductCreateForm } from "@/components/admin/product-create-form";
 import { ProductEditor } from "@/components/admin/product-editor";
@@ -10,7 +11,11 @@ import {
 } from "@/components/admin/variant-editor";
 import { listAllOrders, listProductsForAdmin } from "@/lib/admin";
 import { formatNaira } from "@/lib/format";
-import { categoryLabel } from "@/lib/config/business";
+import {
+  categoryLabel,
+  PAYMENT_METHOD,
+  paymentMethodLabel,
+} from "@/lib/config/business";
 import { Chip, type ChipTone } from "@/components/ui/field";
 
 export const metadata: Metadata = {
@@ -53,22 +58,20 @@ export default async function AdminPage() {
 
   return (
     <>
-      <header className="overflow-hidden rounded-card">
-        <div className="band-surface bg-band px-6 py-6 text-on-band">
-          <p className="text-xs font-bold uppercase tracking-widest text-band-accent">
-            Back office
-          </p>
-          <h1 className="mt-1 font-display text-4xl font-extrabold uppercase leading-none tracking-tight sm:text-5xl">
-            Admin
-          </h1>
-          <p className="mt-2 text-sm text-band-muted">
-            {orders.length} order{orders.length === 1 ? "" : "s"},{" "}
-            {products.length} product{products.length === 1 ? "" : "s"} in the
-            shop.
-          </p>
-        </div>
-        <div className="h-1.5 w-full bg-orange" aria-hidden="true" />
-      </header>
+      <PageBand
+        eyebrow="Back office"
+        title="Admin"
+        stats={[
+          {
+            value: orders.length,
+            label: orders.length === 1 ? "order" : "orders",
+          },
+          {
+            value: products.length,
+            label: products.length === 1 ? "product" : "products",
+          },
+        ]}
+      />
 
       <section aria-labelledby="orders-heading" className="mt-10">
         <h2
@@ -85,7 +88,7 @@ export default async function AdminPage() {
             {orders.map((order) => (
               <li
                 key={order.id}
-                className="rounded-card border border-line bg-surface p-4 lift"
+                className="rounded-card border border-card-edge bg-surface p-4 lift"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-baseline gap-3">
@@ -139,8 +142,24 @@ export default async function AdminPage() {
                     <dd className="tabular font-display text-lg font-extrabold text-brand-ink">
                       {formatNaira(order.total)}
                     </dd>
-                    <dd className="text-ink-soft">
-                      {order.payment_status === "paid" ? "paid" : "unpaid"}
+                    <dd className="flex flex-wrap items-center gap-2">
+                      <span className="text-ink-soft">
+                        {order.payment_status === "paid" ? "paid" : "unpaid"}
+                      </span>
+                      {/*
+                        A bank-transfer order is only marked paid once an admin
+                        has verified the transfer. Nothing here infers payment
+                        from the method.
+                      */}
+                      <Chip
+                        tone={
+                          order.payment_method === PAYMENT_METHOD.bankTransfer
+                            ? "mango"
+                            : "neutral"
+                        }
+                      >
+                        {paymentMethodLabel(order.payment_method)}
+                      </Chip>
                     </dd>
                   </div>
                 </dl>
@@ -171,7 +190,7 @@ export default async function AdminPage() {
           {products.map((product) => (
             <li
               key={product.id}
-              className="rounded-card border border-line bg-surface p-4 lift"
+              className="rounded-card border border-card-edge bg-surface p-4 lift"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">

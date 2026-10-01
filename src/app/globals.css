@@ -36,16 +36,21 @@
 
 :root {
   /* ---- Grounds: white dominant, cream supporting ------------------------ */
-  /* The page is white. Only a trace of warmth, so it is not clinical. */
-  --paper: #fffdfc;
-  --surface: #ffffff; /* cards are white on white, lifted by edge + shadow */
-  --cream: #fdf5ea; /* secondary sections */
-  --sand: #f7ead9; /* decorative grounds, well clear of tan */
+  /* The canvas is a very pale zobo blush, so the shop reads colourful and
+     fresh on load while white cards stay clearly separate from it. The blush is
+     deliberately faint: white must remain the dominant surface. */
+  --paper: #fcf3f5;
+  --surface: #ffffff; /* cards and containers: the brightest surface */
+  --cream: #fef7ee; /* selected secondary sections, warm against the blush */
+  --sand: #f8ecef; /* subtle fills, blush-neutral */
 
   --ink: #1c1a1b; /* deep charcoal, NOT chocolate: 17.3:1 on white */
   --ink-soft: #676163; /* neutral grey, 6.1:1 on white */
-  --line: #efe9e3; /* dividers only */
+  --line: #f0e4e7; /* dividers only */
   --edge: #948c86; /* control borders, 3.3:1 on white */
+  /* Card outlines. Darker than --line so a white card reads as an object
+     against the blush canvas, without becoming a thick border. */
+  --card-edge: #e3ced4;
 
   /* ---- Red: the primary brand ------------------------------------------- */
   --red: #a81c29; /* fill; white label 7.4:1 */
@@ -55,7 +60,7 @@
 
   /* ---- Mango and coral: energy ------------------------------------------ */
   --mango: #f7a03c; /* fill; charcoal label 8.0:1 */
-  --mango-ink: #a85d0e; /* as text on white 5.0:1 */
+  --mango-ink: #8f4e0a; /* as text on white 5.9:1, and on mango tint 4.9:1 */
   --mango-tint: #fdeedc;
 
   --coral: #f2674a; /* fill; charcoal label 5.2:1 */
@@ -80,6 +85,12 @@
 
   /* ---- Labels that sit ON a fill (scheme-stable) -------------------------- */
   --on-red: #ffffff;
+  /* Scheme-stable pair for the stat chips inside the red page band.
+     --red-ink is a LIGHT red in the dark scheme, so it cannot be used on a
+     surface that follows the theme. These two are pinned so the chip stays a
+     white tile with a deep red figure in BOTH schemes. */
+  --red-fixed: #a81c29;
+  --chip-on-band: #ffffff;
   --on-warm: #241a1c; /* charcoal: the label on mango, coral and gold fills */
   --on-rose: #ffffff;
   --on-matcha: #ffffff;
@@ -114,12 +125,13 @@
   --paper: #1a1718;
   --surface: #221e20;
   --cream: #2a2527;
-  --sand: #332c2d;
+  --sand: #342c2f;
 
   --ink: #f8f4f3;
   --ink-soft: #beb5b7;
   --line: #3a3335;
   --edge: #7e7577;
+  --card-edge: #4a3f43;
 
   --red: #d22f3c; /* fill; white label 5.0:1 */
   --red-hover: #b82430;
@@ -166,6 +178,9 @@
   --color-ink-soft: var(--ink-soft);
   --color-line: var(--line);
   --color-edge: var(--edge);
+  --color-card-edge: var(--card-edge);
+  --color-red-fixed: var(--red-fixed);
+  --color-chip-on-band: var(--chip-on-band);
 
   /* Accents as text on the page */
   --color-red-ink: var(--red-ink);
@@ -295,6 +310,12 @@ p {
   border-radius: 6px;
 }
 
+/* The band is brand red, so the default red focus ring would vanish on it.
+   The band label is white and clears 7:1 on red in both schemes. */
+.band-surface :focus-visible {
+  outline-color: var(--on-band);
+}
+
 /* ==========================================================================
    Components
    ========================================================================== */
@@ -304,21 +325,21 @@ p {
    shadow plus a wide soft bloom. */
 .lift {
   box-shadow:
-    0 1px 2px rgba(28, 24, 25, 0.04),
-    0 10px 30px -14px rgba(28, 24, 25, 0.14);
+    0 1px 2px rgba(28, 24, 25, 0.05),
+    0 12px 28px -12px rgba(28, 24, 25, 0.2);
 }
 
 .lift-lg {
   box-shadow:
-    0 2px 6px rgba(28, 24, 25, 0.05),
-    0 26px 60px -24px rgba(28, 24, 25, 0.22);
+    0 2px 6px rgba(28, 24, 25, 0.06),
+    0 28px 60px -22px rgba(28, 24, 25, 0.26);
 }
 
 @media (hover: hover) {
   .lift:hover {
     box-shadow:
-      0 2px 4px rgba(28, 24, 25, 0.05),
-      0 18px 40px -18px rgba(28, 24, 25, 0.18);
+      0 3px 6px rgba(28, 24, 25, 0.06),
+      0 20px 44px -18px rgba(28, 24, 25, 0.24);
   }
 }
 

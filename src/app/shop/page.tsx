@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PageBand } from "@/components/page-band";
 import { ProductCard } from "@/components/product-card";
 import {
   categoryLabel,
@@ -30,29 +31,27 @@ export default async function ShopPage(props: PageProps<"/shop">) {
 
   return (
     <>
-      {/* Colour band so the page opens on the brand rather than bare white. */}
-      <section className="band-surface bg-band text-on-band">
-        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:py-14">
-          <p className="text-xs font-bold uppercase tracking-widest text-band-accent">
-            {category ? categoryLabel(category) : "Everything we stock"}
-          </p>
-          <h1 className="mt-2 font-display text-4xl font-extrabold uppercase leading-[0.9] tracking-tight sm:text-6xl">
-            {category ? (
-              categoryLabel(category)
-            ) : (
-              <>
-                The whole
-                <br />
-                <span className="text-brand-ink">counter</span>
-              </>
-            )}
-          </h1>
-          <p className="mt-3 text-sm text-band-muted">
-            {products.length} product{products.length === 1 ? "" : "s"},{" "}
-            {availableCount} available right now.
-          </p>
-        </div>
-      </section>
+      <PageBand
+        eyebrow={category ? categoryLabel(category) : "Everything we stock"}
+        title={
+          category ? (
+            categoryLabel(category)
+          ) : (
+            <>
+              The whole
+              <br />
+            </>
+          )
+        }
+        accent={category ? undefined : "counter"}
+        stats={[
+          {
+            value: products.length,
+            label: products.length === 1 ? "product" : "products",
+          },
+          { value: availableCount, label: "available now" },
+        ]}
+      />
 
       <div className="mx-auto w-full max-w-7xl px-4 py-8">
         <nav aria-label="Product categories">

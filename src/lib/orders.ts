@@ -32,6 +32,7 @@ export type Order = {
   id: string;
   order_number: string;
   status: string;
+  /** From the shared PAYMENT_METHOD set; widened to string for stored rows. */
   payment_method: string;
   payment_status: string;
   customer_name: string;
@@ -226,6 +227,9 @@ export async function createOrderForProfile(
       p_total: total,
       p_idempotency_key: idempotencyKey ?? null,
       p_items: lines,
+      // Server-validated against the shared enum in lib/validation.ts, then
+      // narrowed again inside the function. Never taken raw from the browser.
+      p_payment_method: input.paymentMethod,
     },
   );
 

@@ -3,6 +3,11 @@ import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/profiles";
 import { getOrderOwnedByProfile } from "@/lib/orders";
 import { formatNaira, lineTotal } from "@/lib/format";
+import {
+  BANK_TRANSFER,
+  PAYMENT_METHOD,
+  paymentMethodLabel,
+} from "@/lib/config/business";
 import { ButtonLink } from "@/components/ui/button";
 import { Chip, type ChipTone } from "@/components/ui/field";
 
@@ -72,7 +77,7 @@ export default async function ConfirmationPage(
   // a 404 leaks nothing about other customers' orders.
   if (!order) notFound();
 
-  const block = "rounded-card border border-line bg-surface p-5 lift";
+  const block = "rounded-card border border-card-edge bg-surface p-5 lift";
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-10">
@@ -170,12 +175,62 @@ export default async function ConfirmationPage(
             Payment and status
           </h2>
           <p className="mt-2 text-sm text-ink-soft">
-            Pay the rider in cash when your order arrives.
+            {order.payment_method === PAYMENT_METHOD.bankTransfer
+              ? "Transfer the amount to the account below, then we confirm before dispatch."
+              : "Pay the rider in cash when your order arrives."}
           </p>
-          <p className="mt-3">
+          <p className="mt-3 flex flex-wrap items-center gap-2">
+            <Chip
+              tone={
+                order.payment_method === PAYMENT_METHOD.bankTransfer
+                  ? "mango"
+                  : "neutral"
+              }
+            >
+              {paymentMethodLabel(order.payment_method)}
+            </Chip>
             <Chip tone={statusTone(order.status)}>
               {statusLabel(order.status)}
             </Chip>
+          </p>
+
+          {/*
+            Bank transfer details are repeated here so the customer has them
+            on the confirmation as well as in the email. The amount stays
+            unpaid until an admin verifies the transfer by hand.
+          */}
+          {order.payment_method === PAYMENT_METHOD.bankTransfer && (
+            <dl className="mt-4 flex flex-col gap-3 rounded-media bg-cream p-4">
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wide text-ink-soft">
+                  Bank name
+                </dt>
+                <dd className="mt-0.5 break-words text-sm font-medium text-ink">
+                  {BANK_TRANSFER.bankName}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wide text-ink-soft">
+                  Account name
+                </dt>
+                <dd className="mt-0.5 break-words text-sm font-medium text-ink">
+                  {BANK_TRANSFER.accountName}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wide text-ink-soft">
+                  Account number
+                </dt>
+                <dd className="tabular mt-0.5 break-words text-sm font-medium text-ink">
+                  {BANK_TRANSFER.accountNumber}
+                </dd>
+              </div>
+            </dl>
+          )}
+
+          <p className="mt-3 text-xs leading-relaxed text-ink-soft">
+            Use {order.order_number} as the transfer reference so we can match
+            your payment. This order stays unpaid until we confirm the transfer.
           </p>
         </section>
       </div>

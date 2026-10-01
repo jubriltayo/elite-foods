@@ -42,7 +42,7 @@ export function CartView({
 
   if (items.length === 0) {
     return (
-      <div className="mt-8 rounded-card border-2 border-dashed border-line bg-cream p-8 text-center">
+      <div className="mt-8 rounded-card border-2 border-dashed border-edge bg-cream p-8 text-center">
         <p className="font-display text-2xl font-extrabold uppercase text-on-orange">
           Your cart is empty
         </p>
@@ -92,7 +92,7 @@ export function CartView({
         {rows.map((row) => (
           <li
             key={row.key}
-            className="flex gap-4 rounded-card border border-line bg-surface p-3 lift sm:p-4"
+            className="flex gap-4 rounded-card border border-card-edge bg-surface p-3 lift sm:p-4"
           >
             <Link
               href={`/shop/${row.product.slug}`}
@@ -178,7 +178,7 @@ export function CartView({
       </ul>
 
       {unknownCount > 0 && (
-        <p className="rounded-card border-2 border-orange bg-orange-tint p-4 text-sm font-bold text-ink">
+        <p className="rounded-card border border-mango-ink bg-orange-tint p-4 text-sm font-bold text-ink">
           {unknownCount} item{unknownCount === 1 ? "" : "s"} in your cart no
           longer exist. Clear the cart to start fresh.
         </p>

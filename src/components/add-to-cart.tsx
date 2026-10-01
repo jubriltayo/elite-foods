@@ -55,7 +55,7 @@ export function AddToCart({ product }: { product: Product }) {
 
   if (product.variants.length === 0) {
     return (
-      <p className="rounded-card border-2 border-line p-5 text-sm text-ink-soft">
+      <p className="rounded-card border border-edge bg-surface p-5 text-sm text-ink-soft">
         No options are listed for this product yet.
       </p>
     );

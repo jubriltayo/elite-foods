@@ -41,7 +41,7 @@ export function ProductCreateForm() {
 
   if (!open) {
     return (
-      <div className="rounded-card border-2 border-dashed border-line bg-cream p-5">
+      <div className="rounded-card border-2 border-dashed border-edge bg-cream p-5">
         <p className="font-display text-lg font-extrabold uppercase text-ink">
           Add a product
         </p>

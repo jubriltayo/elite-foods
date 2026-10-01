@@ -3,6 +3,7 @@ import Link from "next/link";
 import { listOrdersForProfile } from "@/lib/orders";
 import { getCurrentProfile } from "@/lib/profiles";
 import { formatNaira } from "@/lib/format";
+import { PAYMENT_METHOD, paymentMethodLabel } from "@/lib/config/business";
 import { ButtonLink } from "@/components/ui/button";
 import { Chip, type ChipTone } from "@/components/ui/field";
 
@@ -82,7 +83,7 @@ export default async function OrdersPage() {
       </header>
 
       {orders.length === 0 ? (
-        <div className="mt-8 rounded-card border-2 border-dashed border-line bg-cream p-8 text-center">
+        <div className="mt-8 rounded-card border-2 border-dashed border-edge bg-cream p-8 text-center">
           <p className="font-display text-2xl font-extrabold uppercase text-on-orange">
             No orders yet
           </p>
@@ -98,7 +99,7 @@ export default async function OrdersPage() {
           {orders.map((order) => (
             <li
               key={order.id}
-              className="rounded-card border border-line bg-surface p-5 lift"
+              className="rounded-card border border-card-edge bg-surface p-5 lift"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <Link
@@ -132,7 +133,15 @@ export default async function OrdersPage() {
                 <Chip tone={statusTone(order.status)}>
                   {statusLabel(order.status)}
                 </Chip>
-                <Chip>Pay on delivery</Chip>
+                <Chip
+                  tone={
+                    order.payment_method === PAYMENT_METHOD.bankTransfer
+                      ? "mango"
+                      : "neutral"
+                  }
+                >
+                  {paymentMethodLabel(order.payment_method)}
+                </Chip>
               </div>
             </li>
           ))}

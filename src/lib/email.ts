@@ -11,7 +11,12 @@
  * carry on. A second order is never created because an email failed.
  */
 
-import { SHOP } from "@/lib/config/business";
+import {
+  BANK_TRANSFER,
+  PAYMENT_METHOD,
+  paymentMethodLabel,
+  SHOP,
+} from "@/lib/config/business";
 import { getMailgunEnv } from "@/lib/env";
 import { formatNaira, lineTotal } from "@/lib/format";
 import type { OrderWithItems } from "@/lib/orders";
@@ -66,7 +71,20 @@ function textBody(order: OrderWithItems): string {
   lines.push(`${order.customer_name} · ${order.customer_phone}`);
   lines.push(order.delivery_address);
   lines.push("");
-  lines.push("Payment: Pay on Delivery");
+  lines.push(`Payment: ${paymentMethodLabel(order.payment_method)}`);
+
+  // Bank details are included so the customer has them in the same message.
+  // The order remains unpaid until an admin verifies the transfer by hand.
+  if (order.payment_method === PAYMENT_METHOD.bankTransfer) {
+    lines.push("");
+    lines.push("Transfer to");
+    lines.push(`Bank: ${BANK_TRANSFER.bankName}`);
+    lines.push(`Account name: ${BANK_TRANSFER.accountName}`);
+    lines.push(`Account number: ${BANK_TRANSFER.accountNumber}`);
+    lines.push(
+      `Use ${order.order_number} as the transfer reference. We confirm receipt before dispatch.`,
+    );
+  }
 
   if (order.note) {
     lines.push("");
@@ -143,8 +161,24 @@ function htmlBody(order: OrderWithItems): string {
       </table>
 
       <p style="margin:20px 0 0;font-size:14px;">
-        <strong>Payment:</strong> Pay on Delivery
+        <strong>Payment:</strong> ${escapeHtml(paymentMethodLabel(order.payment_method))}
       </p>
+
+      ${
+        order.payment_method === PAYMENT_METHOD.bankTransfer
+          ? `
+      <p style="margin:16px 0 0;font-size:14px;">
+        <strong>Transfer to</strong><br />
+        Bank: ${escapeHtml(BANK_TRANSFER.bankName)}<br />
+        Account name: ${escapeHtml(BANK_TRANSFER.accountName)}<br />
+        Account number: ${escapeHtml(BANK_TRANSFER.accountNumber)}
+      </p>
+      <p style="margin:16px 0 0;font-size:13px;color:#555;">
+        Use ${escapeHtml(order.order_number)} as the transfer reference. We
+        confirm receipt before dispatch, and your order stays unpaid until we do.
+      </p>`
+          : ""
+      }
 
       <p style="margin:16px 0 0;font-size:14px;">
         <strong>Delivering to</strong><br />
