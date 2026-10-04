@@ -10,19 +10,24 @@ This document is the contract handed to the mobile project.
 
 ## Decisions of record
 
-| #   | Decision                                                                                                                           |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | The "database-persisted carts" exclusion is **lifted**. A server-side cart is in scope because the mobile app must share the cart. |
-| 2   | Mobile is React Native with Expo, in a **separate repo**. No mobile code here.                                                     |
-| 3   | Dead cart lines use `ON DELETE SET NULL`, matching `order_items`. Not cascade.                                                     |
-| 4   | `PUT /cart` is replace. Last-write-wins across devices is **accepted** for MVP.                                                    |
-| 5   | Signed-in users get an **in-memory overlay**, not a `localStorage` cache.                                                          |
-| 6   | API tokens use a **dedicated `API_TOKEN_SECRET`**, not `AUTH_SECRET`, and carry verified `iss` + `aud`.                            |
-| 7   | Google `aud` is checked against a **comma-separated list** of client ids (Android, iOS, web).                                      |
-| 8   | **No application-level rate limiter.** Rely on Vercel. Recorded as a known gap.                                                    |
-| 9   | Mobile is **customer-only**. No `/api/v1/admin/*`.                                                                                 |
-| 10  | `jose` becomes a **direct** dependency.                                                                                            |
-| 11  | Route handlers **never** call `redirect()`; they return the JSON envelope with 401.                                                |
+| #   | Decision                                                                                                                                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | The "database-persisted carts" exclusion is **lifted**. A server-side cart is in scope because the mobile app must share the cart.            |
+| 2   | Mobile is React Native with Expo, in a **separate repo**. No mobile code here.                                                                |
+| 3   | Dead cart lines use `ON DELETE SET NULL`, matching `order_items`. Not cascade.                                                                |
+| 4   | `PUT /cart` is replace. Last-write-wins across devices is **accepted** for MVP.                                                               |
+| 5   | Signed-in users get an **in-memory overlay**, not a `localStorage` cache.                                                                     |
+| 6   | API tokens use a **dedicated `API_TOKEN_SECRET`**, not `AUTH_SECRET`, and carry verified `iss` + `aud`.                                       |
+| 7   | Google `aud` is checked against a **comma-separated list** of client ids (Android, iOS, web).                                                 |
+| 8   | **No application-level rate limiter.** Rely on Vercel. Recorded as a known gap.                                                               |
+| 9   | Mobile is **customer-only**. No `/api/v1/admin/*`.                                                                                            |
+| 10  | `jose` becomes a **direct** dependency.                                                                                                       |
+| 11  | Route handlers **never** call `redirect()`; they return the JSON envelope with 401.                                                           |
+| 12  | The checkout rules move into `lib/checkout.ts` **before** any order route is written. One implementation, two transports.                     |
+| 13  | `placeOrderForProfile` takes `Omit<CheckoutInput, "items">`. A transport **cannot** pass a basket; this is a compile error, not a convention. |
+| 14  | The **order's uuid is exposed**, unlike a product's, because an order has no slug and `/orders/[id]` takes it.                                |
+| 15  | A repeated idempotency key returns the original order and **ignores a differing body**. Recorded, not "fixed".                                |
+| 16  | A public `GET /api/v1/delivery-areas` is added, because `deliveryArea` was validated but never documented to clients.                         |
 
 ## The problem being solved
 
@@ -224,7 +229,7 @@ item from a null variant. This same rule applies to the phase 4 order endpoint.
 
 ---
 
-## Phase 2 — Public catalog endpoints (approved separately, not started)
+## Phase 2 - Public catalog endpoints (complete)
 
 Read-only, no auth, no new tables.
 
@@ -416,21 +421,36 @@ left in the repository.
 
 ---
 
-## Phase 4 — Order endpoints (specified, not built)
+## Phase 4 — Order endpoints (complete)
 
-`GET /api/v1/orders` and `GET /api/v1/orders/[id]` are in scope here, without which
-the mobile app could not show order history.
+`GET /api/v1/orders`, `POST /api/v1/orders` and `GET /api/v1/orders/[id]` are built,
+without which the mobile app could not buy or show order history.
 
 | File                                  | Change                                              |
 | ------------------------------------- | --------------------------------------------------- |
+| `src/lib/checkout.ts`                 | **new.** The shared order-placement path            |
 | `src/app/api/v1/orders/route.ts`      | **new.** `POST` place an order, `GET` order history |
 | `src/app/api/v1/orders/[id]/route.ts` | **new.** `GET` one order, ownership-checked         |
+| `src/lib/api-orders.ts`               | **new.** Maps stored orders onto the wire shapes    |
+| `src/app/checkout/actions.ts`         | Reduced to a transport that delegates               |
 
-`POST /api/v1/orders` consumes the **server cart** as the source of truth. Items are
-**not** accepted in the request — accepting them would create a second way to place
-an order. The route reads the cart, calls `createOrderForProfile(profile, input)`
-**unchanged**, and only then clears the cart. If order creation fails, the cart is
-left intact.
+### 6.1 One implementation of the checkout rules
+
+Before any route was added, the order-placement logic moved out of the web Server
+Action into `lib/checkout.ts` as `placeOrderForProfile`. Both transports call it, so
+there is no second copy of the rules to drift out of agreement about money. The Action
+keeps only what is specific to being a form: resolving the session and issuing the
+signed-out `redirect()`, which an API route must never do.
+
+`placeOrderForProfile` owns, once: the basket comes from the server cart and never
+from the request; a dead or unavailable line blocks the order rather than being
+silently dropped; pricing and the total are decided from the database; the cart is
+cleared **only after** the order is durable; the confirmation email is best-effort; and
+a retried idempotency key returns the original order.
+
+Its parameter type is `Omit<CheckoutInput, "items">`. A transport therefore
+**physically cannot** hand it a basket, which turns "the cart is the only source of
+truth" from a convention into a compile error. `createOrderForProfile` is not modified.
 
 ### 6.2 Required: parse through `checkoutSchema`
 
@@ -440,41 +460,71 @@ This is not optional and is the easiest thing to get wrong.
 normalize. The Zod schema is the only place normalization happens, so a route that
 builds the input object by hand will store whatever the client sent, unvalidated.
 
-The route must therefore:
+The route therefore:
 
-1. Build a plain object from the request body.
+1. Builds a plain object from the request body.
 2. `checkoutSchema.safeParse` it.
-3. On failure return the `VALIDATION_ERROR` envelope with per-field messages.
-4. Pass `parsed.data` — never the raw body — to `createOrderForProfile`.
+3. On failure returns the `VALIDATION_ERROR` envelope with per-field messages.
+4. Passes `parsed.data` — never the raw body — to `placeOrderForProfile`.
 
 This is what carries the **phone normalization**: `checkoutSchema` accepts
 `+2348030511967`, `2348030511967` and spaced or hyphenated variants and stores
 `08030511967` (`phoneSchema` in `lib/validation.ts`). Skipping the schema would
 persist `"+234 803 051 1967"` verbatim into `orders.customer_phone`, which is the
-exact bug found during phase 1 manual testing.
+exact bug found during phase 1 manual testing. Verified over HTTP: `"+234 803 051 1967"`
+was stored as `"08030511967"`.
 
 Two things the schema deliberately strips, because they are absent from the parsed
-output and must never reach `createOrderForProfile` from a route: any client-supplied
-`email` (the address comes from the profile) and any client-supplied price, subtotal,
-total, role or user id.
+output and must never reach order creation from a route: any client-supplied `email`
+(the address comes from the profile) and any client-supplied price, subtotal, total,
+role or user id.
 
-`createOrderForProfile` is **deliberately not modified.** It is the most
-security-critical function in the codebase and it works; the route adapts to it.
+### 6.3 Verified against the real database
 
-Verification:
+Over real HTTP on the running app, with genuine bearer tokens and a genuine Auth.js
+encrypted session cookie, 67 assertions across two runs. Every test row, cart and
+temporary variant was deleted afterwards; the database is back to 6 orders and 0 carts.
 
-1. `npm run check` && `npm run build`.
-2. Place a bank-transfer order via the API; assert the DB row has
-   `payment_method = 'bank_transfer'` and `payment_status = 'unpaid'` (**not** paid).
-3. Idempotency: repeat with the same `idempotencyKey`; assert one row, same
-   `order_number`.
-4. Empty cart → `400 VALIDATION_ERROR`, no order created.
-5. A cart containing a dead line → rejected, no order created.
-6. `GET /api/v1/orders` returns only the caller's orders.
-7. `GET /api/v1/orders/<someone-elses-id>` → `404`, no data leaked.
-8. Cart is empty after success and **unchanged** after a failure.
-9. Mailgun email still sends, and the order survives a Mailgun failure.
-10. Cleanup every order and item created during testing.
+| #   | Check                                                        | Result                                          |
+| --- | ------------------------------------------------------------ | ----------------------------------------------- |
+| 1   | Unauthenticated `GET`/`POST`                                 | `401` in the envelope, never a redirect         |
+| 2   | `GET /orders` newest first, caller's only, whole-Naira money | pass                                            |
+| 3   | `GET /orders/[id]` line items carry the snapshot             | pass                                            |
+| 4   | Cross-account read                                           | `404`, not `403`                                |
+| 5   | Malformed id / unknown uuid                                  | `404`                                           |
+| 6   | Empty cart                                                   | `400`, no order                                 |
+| 7   | Request submitting `quantity: 99` against a cart of 2        | stored 2                                        |
+| 8   | `+234` phone                                                 | stored `08030511967`                            |
+| 9   | Cart emptied after success, intact after every failure       | pass                                            |
+| 10  | Bank transfer                                                | `payment_status = 'unpaid'` in the database     |
+| 11  | Idempotent replay                                            | same id and totals, one row, new cart untouched |
+| 12  | Header key beats body key                                    | pass                                            |
+| 13  | Malformed key                                                | `400`, cart survived                            |
+| 14  | Unavailable product                                          | `400`, no order, line kept as an issue          |
+| 15  | Dead line (variant deleted)                                  | `400`, no order, cleared by `PUT /cart`         |
+| 16  | Bearer **and** cookie both authenticate                      | pass                                            |
+| 17  | Modified / unsigned cookie                                   | `401`                                           |
+| 18  | Real Mailgun 403 on an unauthorised recipient                | order still `200`, durable, `emailSent: false`  |
+| 19  | Email module stubbed to throw                                | no throw, order durable, cart cleared           |
+| 20  | Secrets, `google_sub`, internal join ids, profile id         | absent from every response                      |
+
+Check 18 is worth noting: the configured Mailgun account is a **free sandbox**, which
+only delivers to authorised recipients. Ordering as `jubriltech7@gmail.com` produces a
+real `403` from Mailgun — so the mail-failure guarantee was proved through the entire
+HTTP stack rather than only simulated.
+
+Check 19 used the same order-placement path with the email module stubbed, confirming
+the failure is swallowed rather than merely absent in that one case.
+
+The web checkout page, form and confirmation still render, and the extraction was
+checked to be non-regressive: a request submitting `quantity: 99` against a cart of 1
+stores 1, and all five customer-facing failure messages are byte-identical to before.
+
+The Server Action itself is not driven directly by an automated test. It is a
+transport whose logic lives in `lib/checkout.ts`, which is covered above; the Action's
+own contribution is covered by typecheck, build and an unchanged exported result
+shape. Driving a `useActionState` action over HTTP requires React's internal action
+encoding, which is not a stable interface to assert against.
 
 Risks: double submission from a mobile retry, mitigated by the existing
 `idempotencyKey` unique constraint; and clearing the cart before the order is durable,
@@ -531,6 +581,7 @@ confirm the row exists.
 | Method | Path                      | Auth                           | Purpose                                       |
 | ------ | ------------------------- | ------------------------------ | --------------------------------------------- |
 | `POST` | `/api/v1/auth/token`      | none (Google ID token in body) | Exchange a Google ID token for a bearer token |
+| `GET`  | `/api/v1/delivery-areas`  | none                           | Delivery areas and their fees                 |
 | `GET`  | `/api/v1/products`        | none                           | List products                                 |
 | `GET`  | `/api/v1/products/[slug]` | none                           | One product with variants                     |
 | `GET`  | `/api/v1/cart`            | required                       | Read the caller's cart, priced server-side    |
@@ -539,6 +590,30 @@ confirm the row exists.
 | `POST` | `/api/v1/orders`          | required                       | Place an order from the cart                  |
 | `GET`  | `/api/v1/orders`          | required                       | The caller's order history                    |
 | `GET`  | `/api/v1/orders/[id]`     | required                       | One order, ownership-checked                  |
+
+`required` means either credential: an `Authorization: Bearer <token>` header, or the
+Auth.js session cookie the browser already carries.
+
+#### `GET /api/v1/delivery-areas`
+
+Public. Added in phase 4 because `POST /api/v1/orders` requires a `deliveryArea` that
+is validated against `DELIVERY_AREA_IDS`, and the contract never said where the valid
+values came from or what they cost. Without it a client would hardcode `"abeokuta"`
+and could not show a delivery charge before the customer orders.
+
+```json
+{
+  "data": {
+    "areas": [{ "id": "abeokuta", "label": "Abeokuta", "fee": 1000 }]
+  },
+  "error": null
+}
+```
+
+`id` is the value to send as `deliveryArea`. `fee` is a whole Naira integer and is the
+figure checkout actually charges: the route prices through the same `deliveryFeeFor`
+the checkout form uses, so the two cannot drift. Verified by feeding every returned
+id through the real `checkoutSchema` and comparing the fee to `deliveryFeeFor`.
 
 #### `POST /api/v1/auth/token`
 
@@ -719,23 +794,59 @@ Note what is **absent**: no `email` (taken from the profile), no `items`, no pri
 no totals, no status. `paymentMethod` is validated against the shared enum in
 `lib/validation.ts`.
 
+`items` is not merely ignored — it is removed from the schema, so a client that sends
+it anyway has it stripped rather than honoured. The only basket is the saved cart.
+
+`customerPhone` is normalized by the schema, so `"+234 803 051 1967"` is stored as
+`"08030511967"`. Sending an unnormalized phone number does not corrupt the order.
+
+**Idempotency.** The key is read from an `Idempotency-Key` header, falling back to the
+`idempotencyKey` body field; the header wins when both are present.
+
 ```json
 {
   "data": {
-    "orderId": "uuid",
+    "id": "uuid",
     "orderNumber": "EFS-000013",
+    "status": "pending",
     "subtotal": 600,
     "deliveryFee": 1000,
     "total": 1600,
-    "status": "pending",
     "paymentMethod": "pay_on_delivery",
-    "paymentStatus": "unpaid"
+    "paymentStatus": "unpaid",
+    "createdAt": "2026-10-04T12:00:00Z",
+    "emailSent": true,
+    "idempotentReplay": false
   },
   "error": null
 }
 ```
 
+The id is the order's uuid and is what `GET /api/v1/orders/[id]` takes. Unlike a
+product's uuid it is exposed, because an order has no slug.
+
+`emailSent` reports whether Mailgun accepted the confirmation. **It never affects the
+order**: the order exists and is authoritative either way, and a `false` here is not
+an error. See "Mailgun failure" under known gaps.
+
+`idempotentReplay` is `true` when the key matched an order that already existed, in
+which case this call created nothing, cleared no cart and sent no second email.
+
+**Repeating a key with a different body returns the original order and ignores the
+new body.** The key, not the body, is the retry boundary. A client must therefore mint
+a **fresh key per distinct order attempt** — reusing one for a genuinely new order
+returns the older order. Detecting a mismatched body would mean hashing the payload
+and storing it beside the order, which this design does not do.
+
+The retry is answered **before the cart is read**. The first attempt empties the cart
+and order creation rejects an empty item list, so consulting the cart first would
+answer every retry with "Your cart is empty" instead of returning the order that was
+already created.
+
 #### `GET /api/v1/orders`
+
+The caller's orders, newest first. Ownership is enforced in the SQL `WHERE` clause, so
+another customer's order is never loaded into the process.
 
 ```json
 {
@@ -745,6 +856,8 @@ no totals, no status. `paymentMethod` is validated against the shared enum in
         "id": "uuid",
         "orderNumber": "EFS-000013",
         "status": "pending",
+        "subtotal": 600,
+        "deliveryFee": 1000,
         "total": 1600,
         "paymentMethod": "pay_on_delivery",
         "paymentStatus": "unpaid",
@@ -757,10 +870,51 @@ no totals, no status. `paymentMethod` is validated against the shared enum in
 }
 ```
 
+`itemCount` is the total number of units across the order's lines. The stored `email`
+column is not returned: it is the caller's own address and the app already knows it.
+
 #### `GET /api/v1/orders/[id]`
 
-Full order including line items with snapshotted names, labels and unit prices.
-Another customer's order → `404 NOT_FOUND`.
+One order with its line items. Another customer's order, a malformed id and an id that
+does not exist are **all** `404 NOT_FOUND`. Never `403`: a 403 would confirm the id is
+real and turn this endpoint into a probe for other customers' orders.
+
+```json
+{
+  "data": {
+    "id": "uuid",
+    "orderNumber": "EFS-000013",
+    "status": "pending",
+    "subtotal": 600,
+    "deliveryFee": 1000,
+    "total": 1600,
+    "paymentMethod": "pay_on_delivery",
+    "paymentStatus": "unpaid",
+    "createdAt": "2026-10-04T12:00:00Z",
+    "itemCount": 2,
+    "customerName": "...",
+    "customerPhone": "08030511967",
+    "deliveryArea": "abeokuta",
+    "deliveryAddress": "...",
+    "note": null,
+    "items": [
+      {
+        "variantId": "uuid or null",
+        "productName": "Dodo Ikire",
+        "variantLabel": "50g",
+        "unitPrice": 300,
+        "quantity": 2,
+        "lineTotal": 600
+      }
+    ]
+  },
+  "error": null
+}
+```
+
+The item fields are **historical snapshots** taken at checkout, so a later rename or
+reprice cannot rewrite what an order says. `variantId` is `null` when the variant was
+deleted after the order was placed; the snapshot still stands.
 
 ---
 
@@ -780,9 +934,14 @@ phase-specific verification, plus cleanup of any test data.
 | 3a  | `jose`, env, `getProfileByGoogleSub`             | Foundations                                             |
 | 3b  | `api-auth.ts`, `api-token.ts`, `google-token.ts` | Credential handling                                     |
 | 3c  | `/api/v1/auth/token` route                       | **Mobile can authenticate as the same user**            |
-| 4   | Order endpoints                                  | Mobile can buy and see history                          |
+| 4a  | Extract `lib/checkout.ts` from the Server Action | One implementation of the checkout rules                |
+| 4b  | Order endpoints                                  | Mobile can buy and see history                          |
+| 4c  | `/api/v1/delivery-areas`                         | Mobile can show a total before ordering                 |
 
-Slices 1b and 3b contain the logic worth reviewing most carefully — they are the two
+**All slices are complete.** The whole customer journey is now reachable from a mobile
+client: browse, sign in as the same customer, share the cart, buy, and read history.
+
+Slices 1b, 3b and 4a contain the logic worth reviewing most carefully — they are the
 places where a mistake is a security or money bug rather than a visual one.
 
 ## Known gaps
@@ -801,6 +960,18 @@ places where a mistake is a security or money bug rather than a visual one.
 - **Merge is not atomic** against a concurrent merge from another device.
 - **Several dead lines** can exist in one cart, because `NULL`s are distinct in the
   unique constraint. Intended.
+- **The valid `paymentMethod` values are not exposed.** This is the same class of gap
+  `GET /api/v1/delivery-areas` closed for `deliveryArea`: `checkoutSchema` validates
+  `paymentMethod` against the shared enum in `lib/config/business.ts`, but the
+  contract only ever shows `"pay_on_delivery"` inside a sample body, so a client has
+  to hardcode the strings. Currently `pay_on_delivery` and `bank_transfer`; both leave
+  the order `unpaid`, and `bank_transfer` shows bank details on the confirmation.
+  A three-line addition to the same public reference endpoint would close it. Not
+  added, because phase 4 scoped the new endpoint to delivery areas only.
+- **Mailgun is a free sandbox account.** It only delivers to authorised recipients and
+  returns `403` for anyone else. The order is unaffected — that is the point, and it is
+  now verified — but before a real launch the account needs a paid plan or a verified
+  sending domain, or no customer will receive a confirmation.
 
 ## Explicitly not doing
 

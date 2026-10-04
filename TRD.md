@@ -1659,6 +1659,21 @@ architecture rules the implementation must satisfy.
 Route handlers live under `src/app/api/v1`. They sit alongside, and do not replace,
 `/api/auth/[...nextauth]`, which Auth.js continues to own.
 
+| Method | Path                      | Auth  | Purpose                           |
+| ------ | ------------------------- | ----- | --------------------------------- |
+| `POST` | `/api/v1/auth/token`      | none¹ | Exchange a Google ID token        |
+| `GET`  | `/api/v1/delivery-areas`  | none  | Delivery areas and fees           |
+| `GET`  | `/api/v1/products`        | none  | Catalog                           |
+| `GET`  | `/api/v1/products/[slug]` | none  | One product with variants         |
+| `GET`  | `/api/v1/cart`            | req.  | Read the cart, priced server-side |
+| `PUT`  | `/api/v1/cart`            | req.  | Replace the cart                  |
+| `POST` | `/api/v1/cart/merge`      | req.  | Additive merge                    |
+| `POST` | `/api/v1/orders`          | req.  | Place an order from the cart      |
+| `GET`  | `/api/v1/orders`          | req.  | The caller's order history        |
+| `GET`  | `/api/v1/orders/[id]`     | req.  | One order, ownership-checked      |
+
+¹ A Google ID token in the body is the credential being exchanged.
+
 ## 35.2 Thin routes
 
 A route handler is a transport. It authenticates, validates input with Zod, and
@@ -1670,6 +1685,12 @@ delegates.
   never implemented twice.
 - `createOrderForProfile` is not refactored to suit a new caller. A new caller adapts
   to it.
+
+The second bullet is enforced structurally. Order placement lives in
+`lib/checkout.ts` as `placeOrderForProfile`, and both the checkout Server Action and
+`POST /api/v1/orders` call it. Its parameter type is `Omit<CheckoutInput, "items">`,
+so a transport **cannot** pass a basket at all — the rule that the saved cart is the
+only source of truth is a compile error rather than a convention.
 
 The server decides the user, the prices, availability and the totals. A route never
 accepts a price, a subtotal, a total, a role or a user id from a client.
