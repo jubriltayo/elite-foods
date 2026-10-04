@@ -380,6 +380,40 @@ application. The mobile app never renders these pages, so it loses nothing.
 - **Clock skew** across devices could reject a valid token; a small leeway is applied.
 - **`jose` must be a direct dependency.** Relying on a transitive one is fragile.
 
+### 3.6 Verified end to end
+
+Confirmed against the live project with a **real Google ID token** for
+`jubriltayo@gmail.com` (an `admin`), exchanged on the running dev server:
+
+1. `POST /api/v1/auth/token` returns `200` with the success envelope,
+   `tokenType: "Bearer"`, `expiresIn: 3600`.
+2. The returned `profile.id` equals the `profiles.id` that already owned
+   `google_sub = 103514541681208107152` — **the same row the web session resolves
+   to**. The profile count was unchanged before and after, so no duplicate was
+   created. This is the assertion that proves a mobile customer and a web customer
+   are the same customer.
+3. The issued token's payload is exactly `aud, exp, iat, iss, sub`. `sub` is that
+   profile id and the lifetime is one hour.
+4. The bearer token works on `GET /api/v1/cart` and returns a **byte-identical**
+   body to the session cookie, both for an empty cart and for a seeded one.
+5. The account is `admin` in the database and the response says so, but the token
+   carries no `role`, `email`, `name` or `google_sub` claim. Presenting the token to
+   a page (`/admin`) does not authenticate it either, because bearer tokens are API
+   credentials only.
+
+The token file used for this check was deleted afterwards, and no JWT material was
+left in the repository.
+
+> **A note for whoever runs this next.** Do not hand-copy a JWT out of a browser
+> into a file. A single dropped character in the base64 payload silently corrupts it:
+> the decoded JSON stops parsing, and the decoded `sub` can come out one character
+> longer than the real value, which looks like a database discrepancy and is not
+> one. Write the token to a file directly and assert the file's shape (three
+> segments, valid base64url, payload parses, `aud`/`iss` correct) before sending it
+> anywhere. Such a token must be rejected with `401`, and a test harness must never
+> mint a session cookie from an undefined profile id, because Auth.js will
+> cheerfully create a duplicate account for it.
+
 ---
 
 ## Phase 4 — Order endpoints (specified, not built)
