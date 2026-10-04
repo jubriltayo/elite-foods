@@ -89,3 +89,37 @@ export const BLOCKING_CART_ISSUES: ReadonlySet<ApiCartIssueReason> = new Set([
 export function hasBlockingCartIssue(cart: ApiCart): boolean {
   return cart.issues.some((issue) => BLOCKING_CART_ISSUES.has(issue.reason));
 }
+
+// ---------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------
+
+export type ApiCatalogVariant = {
+  /** Required: a cart line references its variant by this id. */
+  id: string;
+  label: string;
+  /** Whole Naira integer. */
+  price: number;
+};
+
+export type ApiCatalogProduct = {
+  /**
+   * The product's own uuid is deliberately NOT exposed. Nothing a client does
+   * needs it, and the slug already identifies the product. Variant ids ARE
+   * exposed, because a cart line is keyed by variant.
+   */
+  slug: string;
+  name: string;
+  description: string | null;
+  category: string;
+  isAvailable: boolean;
+  /** Cheapest variant price, or null when the product has no variants. */
+  startingPrice: number | null;
+  imageUrl: string | null;
+  /** Cheapest first, matching the shop. */
+  variants: ApiCatalogVariant[];
+};
+
+export type ApiCatalog = {
+  products: ApiCatalogProduct[];
+};

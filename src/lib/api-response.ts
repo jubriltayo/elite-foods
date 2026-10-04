@@ -107,13 +107,17 @@ function fieldsFromZod(error: ZodError): Record<string, string> {
  * A handler returns a Response it built with `ok`/`fail`, or throws. Anything
  * thrown becomes a typed error response. This is what stops a stack trace or an
  * HTML error page from ever reaching an API client.
+ *
+ * The second argument is forwarded untouched, so the wrapper stays transparent to
+ * whatever Next passes a route: a dynamic segment's `params`, for instance. Routes
+ * that need nothing simply omit it.
  */
-export function apiHandler(
-  handler: (request: Request) => Promise<Response>,
-): (request: Request) => Promise<Response> {
-  return async (request: Request): Promise<Response> => {
+export function apiHandler<Context = unknown>(
+  handler: (request: Request, context: Context) => Promise<Response>,
+): (request: Request, context: Context) => Promise<Response> {
+  return async (request: Request, context: Context): Promise<Response> => {
     try {
-      return await handler(request);
+      return await handler(request, context);
     } catch (error) {
       if (error instanceof ApiError) {
         return fail(error);

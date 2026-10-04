@@ -507,7 +507,12 @@ never trusted for authorization.
 
 #### `GET /api/v1/products`
 
-Query: `?category=<id>` optional.
+Query: `?category=<id>` optional, one of `fried-snacks`, `nuts-and-grains`,
+`drinks`.
+
+An unrecognised `category` is **rejected with `400 VALIDATION_ERROR`**, not ignored.
+Silently returning the whole catalog for a typo would be a subtle bug for a client
+that believes it asked for one category.
 
 ```json
 {
@@ -520,8 +525,8 @@ Query: `?category=<id>` optional.
         "category": "fried-snacks",
         "isAvailable": true,
         "startingPrice": 300,
-        "imageUrl": "/products/dodo-ikire.svg",
-        "variants": [{ "id": "uuid", "label": "50g", "price": 300 }]
+        "imageUrl": null,
+        "variants": [{ "id": "uuid", "label": "Small", "price": 300 }]
       }
     ]
   },
@@ -529,9 +534,22 @@ Query: `?category=<id>` optional.
 }
 ```
 
+The product's own `uuid` is **not** exposed: nothing a client does needs it, and the
+slug already identifies the product. **Variant ids are exposed**, because a cart
+line is keyed by variant id.
+
+`imageUrl` is `null` until the shop has real photography. Do not substitute the
+web's placeholder illustrations in `public/products`; those are web-local assets a
+mobile app cannot load. Use your own placeholder.
+
 #### `GET /api/v1/products/[slug]`
 
-Same object shape, single product. Unknown slug → `404 NOT_FOUND`.
+Same object shape, single product, so a detail response is byte-identical to that
+product's entry in the list. Unknown slug → `404 NOT_FOUND`.
+
+A slug containing SQL-injection-shaped text may be blocked by the database host's
+WAF before the query runs, and then returns `500 INTERNAL`. That is expected, still
+arrives as a clean JSON envelope, and should not be retried in a loop.
 
 #### `GET /api/v1/cart`
 
