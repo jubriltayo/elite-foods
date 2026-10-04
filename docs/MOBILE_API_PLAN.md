@@ -371,6 +371,32 @@ an order. The route reads the cart, calls `createOrderForProfile(profile, input)
 **unchanged**, and only then clears the cart. If order creation fails, the cart is
 left intact.
 
+### 6.2 Required: parse through `checkoutSchema`
+
+This is not optional and is the easiest thing to get wrong.
+
+`createOrderForProfile` **trusts its input**. It does not re-validate and does not
+normalize. The Zod schema is the only place normalization happens, so a route that
+builds the input object by hand will store whatever the client sent, unvalidated.
+
+The route must therefore:
+
+1. Build a plain object from the request body.
+2. `checkoutSchema.safeParse` it.
+3. On failure return the `VALIDATION_ERROR` envelope with per-field messages.
+4. Pass `parsed.data` — never the raw body — to `createOrderForProfile`.
+
+This is what carries the **phone normalization**: `checkoutSchema` accepts
+`+2348030511967`, `2348030511967` and spaced or hyphenated variants and stores
+`08030511967` (`phoneSchema` in `lib/validation.ts`). Skipping the schema would
+persist `"+234 803 051 1967"` verbatim into `orders.customer_phone`, which is the
+exact bug found during phase 1 manual testing.
+
+Two things the schema deliberately strips, because they are absent from the parsed
+output and must never reach `createOrderForProfile` from a route: any client-supplied
+`email` (the address comes from the profile) and any client-supplied price, subtotal,
+total, role or user id.
+
 `createOrderForProfile` is **deliberately not modified.** It is the most
 security-critical function in the codebase and it works; the route adapts to it.
 
@@ -520,7 +546,8 @@ Same object shape, single product. Unknown slug → `404 NOT_FOUND`.
         "product": {
           "slug": "dodo-ikire",
           "name": "Dodo Ikire",
-          "isAvailable": true
+          "isAvailable": true,
+          "imageUrl": null
         },
         "variant": { "label": "50g", "price": 300 },
         "lineTotal": 600
@@ -540,6 +567,11 @@ The `items` array above holds a single line of quantity 2, so `itemCount` is 2 a
 `subtotal` is 600. The `issues` entry describes a second, dead line that contributes
 to neither.
 
+- `imageUrl` is resolved server-side so a client can render a line **without also
+  fetching the catalog** to look the product up by slug. It is `null` while the shop
+  has no real photography, in which case the client supplies its own placeholder.
+  Do not point it at the web's placeholder illustrations in `public/products`:
+  those are web-local assets a mobile app cannot load.
 - `lineId` is stable for the lifetime of the line and is what the client uses to
   identify a dead line.
 - Dead lines appear **only** in `issues`, never in `items`.

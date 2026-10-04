@@ -61,7 +61,7 @@ export class CartNotOrderableError extends Error {
 type CartRow = { id: string };
 type CartItemRow = { id: string; variant_id: string | null; quantity: number };
 
-/** Variant + parent product, as needed to price a line. */
+/** Variant + parent product, as needed to price and render a line. */
 type VariantRow = {
   id: string;
   label: string;
@@ -70,6 +70,7 @@ type VariantRow = {
     slug: string;
     name: string;
     is_available: boolean;
+    image_url: string | null;
   } | null;
 };
 
@@ -236,7 +237,7 @@ async function loadVariants(ids: string[]): Promise<Map<string, VariantRow>> {
 
   const { data, error } = await getSupabase()
     .from("product_variants")
-    .select("id, label, price, products(slug, name, is_available)")
+    .select("id, label, price, products(slug, name, is_available, image_url)")
     .in("id", unique);
 
   if (error) {
@@ -318,6 +319,8 @@ function buildCart(
         slug: variant.products.slug,
         name: variant.products.name,
         isAvailable: variant.products.is_available,
+        // Carried so a client can render the line without a second catalog lookup.
+        imageUrl: variant.products.image_url,
       },
       variant: { label: variant.label, price: variant.price },
       lineTotal: variant.price * row.quantity,

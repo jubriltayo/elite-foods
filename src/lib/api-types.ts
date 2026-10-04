@@ -42,6 +42,13 @@ export type ApiCartLine = {
     slug: string;
     name: string;
     isAvailable: boolean;
+    /**
+     * Resolved server-side so a client can render the line without also
+     * fetching the catalog to look the product up by slug. Null when the shop has
+     * no image for the product, in which case the client picks its own
+     * placeholder.
+     */
+    imageUrl: string | null;
   };
   variant: {
     label: string;

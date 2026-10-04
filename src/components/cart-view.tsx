@@ -74,8 +74,8 @@ export function CartView({
 
   const serverMode = lines !== null;
 
-  // The catalog this page was rendered with. Used for imagery in both modes, so
-  // the cart response does not have to carry image data it does not need.
+  // The catalog this page was rendered with. Only a placeholder fallback while
+  // products.image_url is empty; a real image arrives on the cart line itself.
   const catalog = new Map(products.map((product) => [product.slug, product]));
   const imageFor = (slug: string) => {
     const product = catalog.get(slug);
@@ -100,7 +100,9 @@ export function CartView({
       price: line.variant.price,
       lineTotal: line.lineTotal,
       isAvailable: line.product.isAvailable,
-      image: imageFor(line.product.slug),
+      // The server now carries imageUrl on the line. It is null while the shop
+      // has no real photography, in which case the placeholder below is used.
+      image: line.product.imageUrl ?? imageFor(line.product.slug),
     }));
     displaySubtotal = subtotal ?? 0;
   } else {
