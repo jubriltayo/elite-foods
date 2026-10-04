@@ -82,6 +82,31 @@ export const cartItemSchema = z.object({
 });
 
 /**
+ * Upper bound on distinct cart lines.
+ *
+ * Not a business rule, just a guard so one request cannot ask the database to
+ * write an unbounded number of rows. Well above any realistic basket.
+ */
+export const MAX_CART_LINES = 50;
+
+/**
+ * Payload for replacing or merging a cart.
+ *
+ * Same shape for both. Prices, product names and availability are absent by
+ * design: the server resolves those from the database (AGENTS.md section 9).
+ */
+export const cartPayloadSchema = z.object({
+  items: z
+    .array(cartItemSchema)
+    .max(
+      MAX_CART_LINES,
+      `A cart can hold at most ${MAX_CART_LINES} different items`,
+    ),
+});
+
+export type CartPayload = z.infer<typeof cartPayloadSchema>;
+
+/**
  * Checkout payload.
  *
  * Note what is absent: product names, unit prices, subtotal, delivery fee,

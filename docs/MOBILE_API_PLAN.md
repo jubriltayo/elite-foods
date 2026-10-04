@@ -530,17 +530,24 @@ Same object shape, single product. Unknown slug → `404 NOT_FOUND`.
       { "lineId": "uuid", "variantId": null, "reason": "variant_missing" }
     ],
     "subtotal": 600,
-    "itemCount": 1
+    "itemCount": 2
   },
   "error": null
 }
 ```
+
+The `items` array above holds a single line of quantity 2, so `itemCount` is 2 and
+`subtotal` is 600. The `issues` entry describes a second, dead line that contributes
+to neither.
 
 - `lineId` is stable for the lifetime of the line and is what the client uses to
   identify a dead line.
 - Dead lines appear **only** in `issues`, never in `items`.
 - `reason` is one of `variant_missing`, `product_missing`, `unavailable`,
   `quantity_capped`.
+- `itemCount` is the **total number of units** across orderable lines, not the
+  number of lines. This is what a cart badge shows: two lines of quantity 2 and 3
+  give `itemCount: 5`.
 - `subtotal` and `itemCount` **exclude** dead lines and unavailable items.
 - `subtotal` excludes delivery, which is not known until an area is chosen.
 
