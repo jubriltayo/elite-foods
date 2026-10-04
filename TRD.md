@@ -1664,6 +1664,7 @@ Route handlers live under `src/app/api/v1`. They sit alongside, and do not repla
 | `POST` | `/api/v1/auth/token`      | none¹ | Exchange a Google ID token        |
 | `GET`  | `/api/v1/delivery-areas`  | none  | Delivery areas and fees           |
 | `GET`  | `/api/v1/payment-methods` | none  | Valid payment methods             |
+| `GET`  | `/api/v1/categories`      | none  | Valid product categories          |
 | `GET`  | `/api/v1/products`        | none  | Catalog                           |
 | `GET`  | `/api/v1/products/[slug]` | none  | One product with variants         |
 | `GET`  | `/api/v1/cart`            | req.  | Read the cart, priced server-side |
@@ -1725,6 +1726,13 @@ Catalog reads are public. RLS stays enabled on all seven tables with no client
 policies, so the anon key returns nothing. Public catalog data is served by the
 application, not by handing out a database credential.
 
+Three read-only reference endpoints are also public: `/api/v1/delivery-areas`,
+`/api/v1/payment-methods` and `/api/v1/categories`. Each exists because the
+corresponding request field is validated strictly, so a client must be able to
+discover the valid values rather than hardcode them. They read the constants in
+`src/lib/config/business.ts` — the same ones the web pages render — and touch no
+database, so they cannot disagree with the site or with each other.
+
 ## 35.5 Server-side cart
 
 A signed-in cart lives in `carts`/`cart_items` and is read through `src/lib/cart.ts`.
@@ -1757,7 +1765,16 @@ Failure:
 ```
 
 Codes: `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404),
-`VALIDATION_ERROR` (400), `CONFLICT` (409), `RATE_LIMITED` (429), `INTERNAL` (500).
+`VALIDATION_ERROR` (400), `CONFLICT` (409), `RATE_LIMITED` (429), `INTERNAL` (500). The
+code and its status come from one table in `src/lib/api-response.ts`, so they cannot
+drift apart.
+
+`FORBIDDEN`, `CONFLICT` and `RATE_LIMITED` are declared but **not currently returned by
+any route**: there is no admin API to forbid and no application-level rate limiter. They
+are declared so that adding either feature does not also mean inventing an error
+convention. In particular, **a repeated idempotency key with a different body is not a
+`409`** — it is a `200` that returns the original order, because the key rather than the
+body is the retry boundary. See `docs/MOBILE_API_PLAN.md`.
 
 An unexpected exception must still produce this envelope. Handlers are wrapped so a
 bug returns `INTERNAL` rather than an HTML error page or a stack trace. Internal
