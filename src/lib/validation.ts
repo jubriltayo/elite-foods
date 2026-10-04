@@ -44,26 +44,88 @@ export const paymentMethodSchema = z.enum(PAYMENT_METHODS, {
 export type PaymentMethodInput = z.infer<typeof paymentMethodSchema>;
 
 /**
- * Nigerian phone numbers, e.g. 08012345678 or +2348012345678.
+ * Nigerian mobile numbers.
  *
- * TRD section 14 requires server-side normalization. This accepts the common
- * formats and normalizes to an 11-digit local number starting with 0.
+ * TRD section 14 requires server-side normalization. Every accepted form is
+ * normalized to the single stored format `0XXXXXXXXXX`: an 11-digit local number
+ * with a leading zero, which is what every existing order already holds.
+ *
+ * Accepted:
+ * - `08030511967`                 local
+ * - `+2348030511967`              international, with the country code
+ * - `2348030511967`               the same, typed without the plus
+ * - any of the above with spaces, hyphens, dots or brackets
+ *
+ * Rejected:
+ * - `+23408030511967`             the country code REPLACES the leading zero, so
+ *                                 a zero after 234 is a typo rather than a format
+ * - `0803051196`, `080305119678`  wrong length
+ * - `0803051196a`                 letters
+ * - `01234567890`                 `0` followed by a prefix that is not 07/08/09
+ * - empty input
+ *
+ * The rule lives here, in lib/, so the /api/v1/orders endpoint reuses it
+ * unchanged. There is deliberately no second client-side copy: the browser only
+ * hints with `inputMode`, and this is the single authority.
  */
+
+/** 08030511967: eleven digits, a leading zero, then a 07/08/09 network. */
+const LOCAL_NIGERIAN_MOBILE = /^0[789]\d{9}$/;
+
+/**
+ * +2348030511967 or 2348030511967.
+ *
+ * The country code stands in for the leading zero, so the digit after 234 must be
+ * the network prefix itself, never another zero.
+ */
+const INTERNATIONAL_NIGERIAN_MOBILE = /^\+?234[789]\d{9}$/;
+
+/** Removes the separators people naturally type, keeping digits and a plus. */
+function compactPhone(value: string): string {
+  return value.replace(/[\s\-().]/g, "");
+}
+
+/**
+ * Normalizes a Nigerian mobile number, or returns null when it is not one.
+ *
+ * Exported so the rule can be exercised directly and reused without re-deriving
+ * the regular expressions.
+ *
+ * @example normaliseNigerianPhone("+234 803 051 1967") // "08030511967"
+ * @example normaliseNigerianPhone("+23408030511967")   // null
+ */
+export function normaliseNigerianPhone(value: string): string | null {
+  const compact = compactPhone(value);
+
+  if (LOCAL_NIGERIAN_MOBILE.test(compact)) {
+    return compact;
+  }
+
+  if (INTERNATIONAL_NIGERIAN_MOBILE.test(compact)) {
+    // Strip "+234" or "234", then restore the single leading zero.
+    return `0${compact.replace(/^\+?234/, "")}`;
+  }
+
+  return null;
+}
+
 export const phoneSchema = z
   .string()
   .trim()
-  .transform((value) => value.replace(/[\s()-]/g, ""))
+  // Normalize first, validate second. The reverse order rejected every
+  // international number, because the shape it was checked against required a
+  // leading zero that the country-code form does not have.
+  .transform(normaliseNigerianPhone)
   .pipe(
-    z
-      .string()
-      .refine((value) => /^0[789]\d{9}$/.test(value), {
-        message:
-          "Enter a valid Nigerian phone number, e.g. 08012345678 or +2348012345678",
-      })
-      .transform((value) =>
-        value.startsWith("+234") ? `0${value.slice(4)}` : value,
-      ),
+    z.string().refine((value): value is string => value !== null, {
+      message:
+        "Enter a valid Nigerian phone number, e.g. 08030511967 or +2348030511967",
+    }),
   );
+
+/** The stored format, exposed so callers can document it. */
+export const PHONE_EXAMPLE_LOCAL = "08030511967";
+export const PHONE_EXAMPLE_INTERNATIONAL = "+2348030511967";
 
 /** Quantity bounds from TRD section 20. */
 export const MIN_QUANTITY = 1;
