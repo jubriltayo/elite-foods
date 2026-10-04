@@ -180,6 +180,36 @@ export type ApiOrder = ApiOrderSummary & {
   deliveryAddress: string;
   note: string | null;
   items: ApiOrderItem[];
+  /**
+   * Bank details when `paymentMethod` is `bank_transfer`, otherwise null.
+   *
+   * Present because a bank-transfer customer cannot pay without them. Null for
+   * pay on delivery, so a client renders one code path rather than guessing.
+   */
+  bankTransfer: ApiBankTransfer | null;
+};
+
+/**
+ * Where to send a bank transfer.
+ *
+ * Mirrors `BANK_TRANSFER` in `lib/config/business.ts`. These values are placeholders
+ * pending the shop's real banking information (AGENTS.md section 27), so
+ * `isPlaceholder` is reported rather than left for a client to infer from the text.
+ */
+export type ApiBankTransfer = {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  /** What the customer should enter as the transfer reference. */
+  instructions: string;
+  /**
+   * True while the configured details are still placeholders.
+   *
+   * A client should show these values but flag them, rather than present invented
+   * banking information as real. It flips to false automatically once
+   * `BANK_TRANSFER` is replaced with the shop's actual details.
+   */
+  isPlaceholder: boolean;
 };
 
 export type ApiOrderPlaced = Omit<ApiOrderSummary, "itemCount"> & {
@@ -193,6 +223,13 @@ export type ApiOrderPlaced = Omit<ApiOrderSummary, "itemCount"> & {
    * nothing, cleared no cart and sent no second email.
    */
   idempotentReplay: boolean;
+  /**
+   * Bank details when the placed order is `bank_transfer`, otherwise null.
+   *
+   * Returned immediately so the app can show payment instructions without a second
+   * request. Driven by the stored `payment_method`, never by the submitted one.
+   */
+  bankTransfer: ApiBankTransfer | null;
 };
 
 // ---------------------------------------------------------------------------

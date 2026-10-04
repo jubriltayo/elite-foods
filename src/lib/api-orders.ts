@@ -7,12 +7,54 @@
  */
 
 import type { Order, OrderSummary, OrderWithItems } from "@/lib/orders";
+import { BANK_TRANSFER, PAYMENT_METHOD } from "@/lib/config/business";
 import type {
+  ApiBankTransfer,
   ApiOrder,
   ApiOrderItem,
   ApiOrderPlaced,
   ApiOrderSummary,
 } from "@/lib/api-types";
+
+/**
+ * Bank details for an order, or null when it is not a bank transfer.
+ *
+ * Keyed on the order's STORED `payment_method`, never on anything the client sent, so
+ * a client cannot talk its way into being shown bank details for a pay-on-delivery
+ * order or denied them for a bank transfer.
+ *
+ * `isPlaceholder` is derived from the configured values rather than kept as a
+ * separate flag that could drift. It flips to false the moment `BANK_TRANSFER` is
+ * replaced with the shop's real details, with no second edit to remember — which is
+ * the point, because a stale `false` would mean publishing invented banking
+ * information as though it were real.
+ */
+function toApiBankTransfer(paymentMethod: string): ApiBankTransfer | null {
+  if (paymentMethod !== PAYMENT_METHOD.bankTransfer) {
+    return null;
+  }
+
+  return {
+    bankName: BANK_TRANSFER.bankName,
+    accountName: BANK_TRANSFER.accountName,
+    accountNumber: BANK_TRANSFER.accountNumber,
+    instructions: BANK_TRANSFER.instructions,
+    isPlaceholder: isPlaceholderBankDetails(),
+  };
+}
+
+/**
+ * True while `BANK_TRANSFER` still holds placeholder values.
+ *
+ * The placeholders announce themselves in their text ("PLACEHOLDER - bank name not
+ * yet confirmed") and use an all-zero account number, so both are checked.
+ */
+function isPlaceholderBankDetails(): boolean {
+  const text = `${BANK_TRANSFER.bankName} ${BANK_TRANSFER.accountName}`;
+  return (
+    text.includes("PLACEHOLDER") || /^0+$/.test(BANK_TRANSFER.accountNumber)
+  );
+}
 
 /**
  * The fields both the summary and the detail response share.
@@ -70,6 +112,7 @@ export function toApiOrder(order: OrderWithItems): ApiOrder {
     deliveryAddress: order.delivery_address,
     note: order.note,
     items,
+    bankTransfer: toApiBankTransfer(order.payment_method),
   };
 }
 
@@ -88,5 +131,6 @@ export function toApiOrderPlaced(
     ...sharedFields(order),
     emailSent,
     idempotentReplay,
+    bankTransfer: toApiBankTransfer(order.payment_method),
   };
 }
