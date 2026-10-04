@@ -90,7 +90,6 @@ The following are explicitly outside the MVP:
 - Driver management.
 - Automatic delivery pricing by distance.
 - Order-status email notifications.
-- Saved carts in the database.
 - Advanced analytics.
 - Multiple admin roles.
 - Microservices.
@@ -205,7 +204,7 @@ The customer must select a valid variant before adding the product to the cart.
 
 ## 5.4 Cart
 
-The cart is public and does not require authentication.
+Adding to a cart and browsing do not require authentication.
 
 Customers can:
 
@@ -216,11 +215,24 @@ Customers can:
 - Continue shopping.
 - Proceed to checkout.
 
-Cart state is stored in browser `localStorage`.
+### Where the cart is stored
+
+- **Signed out:** in browser `localStorage`, on that device.
+- **Signed in:** in the database, against the customer's account, so the same cart
+  is seen on every device the customer uses, including the mobile app.
+
+On sign-in the device cart is merged into the saved cart. Quantities are added
+together for the same variant and capped at the per-item maximum. A repeated
+sign-in must not double the quantities.
 
 The cart must survive a page refresh.
 
-The cart must not store authoritative prices. Prices shown during checkout are recalculated from the database.
+The cart must not store authoritative prices. Prices and availability are always
+recalculated from the database when the cart is read, and again at checkout.
+
+If a saved cart refers to a product or variant that is no longer available, the
+customer must be told which line is the problem rather than having it silently
+disappear. Such a line cannot be checked out.
 
 ---
 
@@ -272,7 +284,7 @@ Authorization determines **what the user can do**.
 A customer can:
 
 - Browse products.
-- Manage their local cart.
+- Manage their cart, which follows them across devices once signed in.
 - Create orders.
 - View their own orders.
 - View their own profile information.
@@ -313,6 +325,22 @@ A client-side check alone is not sufficient.
 | `/orders/[id]`              | Order detail    | Order owner/admin      |
 | `/orders/[id]/confirmation` | Confirmation    | Order owner/admin      |
 | `/admin`                    | Admin dashboard | Admin                  |
+
+A separate mobile app (React Native with Expo) is built against a versioned JSON
+API rather than against these pages. It signs in with Google and shares the
+customer's identity, cart and orders with the web app.
+
+| Route                     | Purpose                    | Access                 |
+| ------------------------- | -------------------------- | ---------------------- |
+| `/api/v1/auth/token`      | Exchange Google ID token   | Public                 |
+| `/api/v1/products`        | Product list               | Public                 |
+| `/api/v1/products/[slug]` | Product detail             | Public                 |
+| `/api/v1/cart`            | Read or replace the cart   | Authenticated customer |
+| `/api/v1/cart/merge`      | Merge a device cart        | Authenticated customer |
+| `/api/v1/orders`          | Place an order, or history | Authenticated customer |
+| `/api/v1/orders/[id]`     | One order                  | Order owner            |
+
+The mobile app is customer-only. There is no admin API.
 
 ## Home
 

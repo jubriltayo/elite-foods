@@ -59,7 +59,8 @@ The MVP is intentionally small. Do not turn it into a general ecommerce platform
 - Product detail pages
 - Product variants
 - Availability state
-- Local cart using React state + `localStorage`
+- Cart: `localStorage` while signed out, server-side while signed in
+- Versioned JSON API under `/api/v1` for the mobile app
 - Google authentication through Google Cloud Console
 - Auth.js session management
 - Supabase PostgreSQL persistence
@@ -99,7 +100,6 @@ Do not implement unless the user explicitly changes the scope:
 - Driver management
 - Distance-based delivery pricing
 - Order-status email notifications
-- Database-persisted carts
 - Advanced analytics
 - Microservices
 - Large state-management libraries
@@ -120,18 +120,34 @@ Expected stack:
 - `@supabase/supabase-js`
 - Zod
 - Mailgun REST API
-- React state + `localStorage`
+- React state + `localStorage` (signed-out cart), Supabase tables (signed-in cart)
+- Versioned JSON API at `src/app/api/v1`
 - Vercel
 
 ### Critical authentication rule
 
 Do NOT use Supabase Auth.
 
-Authentication architecture:
+**Google is the sole trust anchor. The transport differs per client.**
 
-Google → Auth.js → Next.js session → application `profiles` record
+Identity always resolves to `profiles.google_sub`. What differs is how a client
+proves who it is:
 
-Supabase is the application database, not the identity provider.
+- **Web:** Google → Auth.js → Next.js session cookie → `profiles` record
+- **Mobile:** Google ID token → server verification → API bearer token →
+  `profiles` record
+
+Both paths converge on the same `profiles` row for the same Google account, which
+is what makes a mobile customer the same customer as a web customer.
+
+Rules that hold for every transport:
+
+- Supabase is the application database, never the identity provider.
+- The service-role key never leaves the server and never reaches a client.
+- `role` is never carried in a session or a token. It is re-read from the database
+  on every request that needs it.
+- A second authentication mechanism is permitted only if it verifies against Google
+  and resolves identity the same way. Never introduce an independent credential.
 
 ### Critical server boundary
 
@@ -224,6 +240,8 @@ The MVP uses these application tables:
 - `product_variants`
 - `orders`
 - `order_items`
+- `carts`
+- `cart_items`
 
 Do not add tables unless they are required by an approved feature.
 
@@ -347,11 +365,14 @@ Never create a second order merely because email sending failed.
 
 ## 9. Cart Rules
 
-The cart is public.
+Browsing and adding to a cart never require a session. Where the cart _lives_
+depends on whether the customer is signed in.
 
-Persist cart state in `localStorage`.
+- **Signed out:** cart state is held in `localStorage` on that device.
+- **Signed in:** the cart is held server-side, keyed to `profiles.id`, so it is
+  shared across that customer's devices and with the mobile app.
 
-Recommended logical shape:
+Logical shape. Identical in both cases:
 
 ```ts
 type CartItem = {
@@ -360,7 +381,36 @@ type CartItem = {
 };
 ```
 
-Do not treat cached cart prices as authoritative.
+A signed-in cart stores only `variantId` and `quantity`. Prices, product names and
+availability are never persisted with the cart; every read resolves them from the
+database and computes the subtotal with `lib/pricing.ts`.
+
+### Merging a signed-out cart on sign-in
+
+When a customer signs in, their device cart is merged into the server cart.
+
+- Quantities are **summed** per `variantId`.
+- Each result is capped at `MAX_QUANTITY`.
+- Items already on the server that the device does not mention are left alone.
+
+The merge is applied **at most once**: the client clears its local cart before
+awaiting the merge and restores it only if the merge fails. A repeated sign-in must
+not double the quantities.
+
+### Unavailable variants
+
+A cart line whose variant has been deleted, or whose product is no longer available,
+is retained as a **dead line** rather than silently dropped, so the customer can be
+told why their cart changed.
+
+- Dead lines are reported as issues on cart read and are excluded from the item
+  count and the subtotal.
+- A dead line is removed by replacing the cart with the customer's current list.
+- Checkout and order creation must reject a cart that still contains a dead line.
+  Never create an order item from one.
+
+Dead lines are made possible by `cart_items.variant_id` being nullable with
+`ON DELETE SET NULL`, matching `order_items`.
 
 The cart must:
 
@@ -373,7 +423,7 @@ The cart must:
 - allow continued shopping
 - allow checkout
 
-If cart data is corrupt:
+If client-side cart data is corrupt:
 
 1. Ignore it.
 2. Clear the corrupt state.

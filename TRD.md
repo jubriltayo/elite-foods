@@ -20,7 +20,7 @@ The architecture is intentionally small:
 - Google OAuth configured through Google Cloud Console
 - Supabase PostgreSQL as the application database
 - Mailgun for transactional confirmation email
-- React state + `localStorage` for the cart
+- `localStorage` cart while signed out, `carts`/`cart_items` while signed in
 - Vercel for deployment
 
 ### Critical architectural rule
@@ -85,7 +85,9 @@ Use Next.js server-side code for:
 - Mailgun email sending
 - protected database access
 
-The cart is the only persistent client-side state and is stored in `localStorage`.
+The cart is the only persistent client-side state. It is stored in `localStorage`
+while signed out and in `carts`/`cart_items` while signed in, so the same cart is
+seen on every device the customer uses, including the mobile app.
 
 ---
 
@@ -102,7 +104,7 @@ The cart is the only persistent client-side state and is stored in `localStorage
 | Database client   | `@supabase/supabase-js`               |
 | Validation        | Zod                                   |
 | Email             | Mailgun REST API                      |
-| Cart              | React state + `localStorage`          |
+| Cart              | `localStorage`, or Supabase tables    |
 | Hosting           | Vercel                                |
 
 ### Packages
@@ -243,7 +245,7 @@ Customers can:
 
 - browse products
 - filter products
-- manage their local cart
+- manage their cart, which follows them across devices once signed in
 - create orders
 - view their own orders
 - view their own profile information
@@ -275,13 +277,15 @@ A hidden button or client-side route guard is not sufficient.
 
 Supabase PostgreSQL is the persistent store.
 
-The MVP uses five application tables:
+The application uses seven tables:
 
 1. `profiles`
 2. `products`
 3. `product_variants`
 4. `orders`
 5. `order_items`
+6. `carts`
+7. `cart_items`
 
 ## 6.1 `profiles`
 
@@ -404,6 +408,54 @@ Product name, variant label and price are copied into `order_items` as historica
 
 If a product is later renamed or its price changes, an old order must still show the original information.
 
+## 6.6 `carts`
+
+```sql
+create table public.carts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null unique references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+One cart per customer, enforced by the unique constraint on `user_id`.
+
+The cart stores no prices, product names or availability. Those are resolved from
+`products` and `product_variants` on every read, so a cart can never carry a stale
+price.
+
+## 6.7 `cart_items`
+
+```sql
+create table public.cart_items (
+  id uuid primary key default gen_random_uuid(),
+  cart_id uuid not null references public.carts(id) on delete cascade,
+  variant_id uuid references public.product_variants(id) on delete set null,
+  quantity integer not null check (quantity between 1 and 100),
+  created_at timestamptz not null default now(),
+  unique (cart_id, variant_id)
+);
+
+create index cart_items_cart_id_idx
+on public.cart_items(cart_id);
+```
+
+A line stores only a variant reference and a quantity. That is the whole contract.
+
+`variant_id` is nullable and uses `ON DELETE SET NULL`, deliberately matching
+`order_items`. When an admin deletes a variant, the line is kept as a dead line
+rather than silently disappearing, so the customer can be shown why their cart
+changed. See section 13.
+
+Postgres treats `NULL` values as distinct in a unique constraint, so one cart may
+hold more than one dead line. That is intended and no additional constraint is added
+to prevent it.
+
+Cart lines are read and written only through server code that filters by the
+resolved profile, so ownership is enforced server-side. RLS is enabled and no
+client policy is created, matching every other application table.
+
 ---
 
 # 7. Database Relationships
@@ -450,6 +502,8 @@ alter table public.products enable row level security;
 alter table public.product_variants enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
+alter table public.carts enable row level security;
+alter table public.cart_items enable row level security;
 ```
 
 Because authentication is handled by Auth.js, do not use:
@@ -640,15 +694,18 @@ Keep this status list in one application validation module and mirror it in the 
 
 # 13. Cart
 
-The cart is public and does not require authentication.
+Adding to a cart and browsing never require authentication. Where the cart is
+stored depends on whether the customer is signed in.
 
-Store cart state in:
+| Customer state | Storage                                        |
+| -------------- | ---------------------------------------------- |
+| Signed out     | `localStorage` on that device                  |
+| Signed in      | `carts` / `cart_items`, keyed to `profiles.id` |
 
-```text
-localStorage
-```
+The server-side cart exists so the same cart is visible on every device the
+customer uses, including the mobile app.
 
-Suggested shape:
+Shape, identical in both cases:
 
 ```ts
 type CartItem = {
@@ -657,9 +714,10 @@ type CartItem = {
 };
 ```
 
-Do not store authoritative product prices in the cart.
-
-The UI may display cached product information, but checkout must resolve current product/variant data from Supabase.
+A server-side cart persists only `variantId` and `quantity`. No price, product name
+or availability is stored with it. Every read resolves current product and variant
+rows from Supabase and computes the subtotal with the pricing functions, so a cart
+can never carry a stale price.
 
 ## Cart requirements
 
@@ -672,7 +730,37 @@ The UI may display cached product information, but checkout must resolve current
 - Continue shopping.
 - Proceed to checkout.
 
-## Corrupt cart
+## Merge on sign-in
+
+When a signed-out customer signs in, their `localStorage` cart is merged into the
+server cart.
+
+- Quantities are **summed** per `variantId`.
+- Each merged quantity is capped at `MAX_QUANTITY`.
+- Server lines the device cart does not mention are left untouched.
+
+The merge must be applied **at most once**. The client snapshots its local cart,
+clears it _before_ awaiting the merge, and restores the snapshot only if the merge
+request fails. Clearing first makes a repeated sign-in structurally unable to apply
+the merge twice, and the restore path means a network failure never loses a basket.
+
+## Unavailable variants
+
+`cart_items.variant_id` is nullable with `ON DELETE SET NULL`, matching
+`order_items`. When an admin deletes a variant that a customer still has in their
+cart, the line is retained as a **dead line** rather than silently removed, so the
+customer can be told what happened.
+
+Dead-line behaviour:
+
+- Reported as an issue on cart read, carrying the line's own id so the client can
+  offer to remove it.
+- Excluded from the item count and the subtotal.
+- Removed when the cart is replaced with the customer's current list.
+- Never used to create an order item. Checkout rejects a cart that still contains
+  one.
+
+## Corrupt client cart
 
 If `localStorage` contains invalid JSON or invalid cart entries:
 
@@ -1554,3 +1642,110 @@ Customer views order
   ↓
 Admin manages order
 ```
+
+---
+
+# 35. Mobile API
+
+A separate mobile app (React Native with Expo) is built in its own repository. It
+talks to this application over a versioned JSON API rather than over the pages.
+
+The full request and response contract is maintained in
+[`docs/MOBILE_API_PLAN.md`](./MOBILE_API_PLAN.md). This section records the
+architecture rules the implementation must satisfy.
+
+## 35.1 Routes
+
+Route handlers live under `src/app/api/v1`. They sit alongside, and do not replace,
+`/api/auth/[...nextauth]`, which Auth.js continues to own.
+
+## 35.2 Thin routes
+
+A route handler is a transport. It authenticates, validates input with Zod, and
+delegates.
+
+- All business logic stays in `src/lib`: pricing, validation, availability, order
+  creation and ownership checks.
+- Server Actions and API routes call the same `src/lib` functions. Checkout rules are
+  never implemented twice.
+- `createOrderForProfile` is not refactored to suit a new caller. A new caller adapts
+  to it.
+
+The server decides the user, the prices, availability and the totals. A route never
+accepts a price, a subtotal, a total, a role or a user id from a client.
+
+## 35.3 Authentication
+
+Routes accept either credential through one shared helper, so no route implements
+authentication itself:
+
+- The existing web session cookie (Auth.js).
+- An `Authorization: Bearer` API token.
+
+A route handler must never call `redirect()`. Guarding with a redirect, as the
+protected pages do, would answer an API client with a 307 and an HTML login page
+instead of a JSON error. A route returns the JSON envelope from section 35.6 with
+status `401` and code `UNAUTHENTICATED`.
+
+Identity is resolved to `profiles.google_sub` on both paths. `role` is never carried
+in a token and is re-read from the database on every request that needs it.
+
+API tokens are signed with a dedicated `API_TOKEN_SECRET`, which is separate from
+`AUTH_SECRET` so that compromising one does not compromise the other. Tokens carry
+`iss` and `aud` claims and both are verified on use, so a token minted for one
+purpose cannot be presented for another.
+
+The service-role key is never exposed to any client, in any transport.
+
+## 35.4 Public data
+
+Catalog reads are public. RLS stays enabled on all seven tables with no client
+policies, so the anon key returns nothing. Public catalog data is served by the
+application, not by handing out a database credential.
+
+## 35.5 Server-side cart
+
+A signed-in cart lives in `carts`/`cart_items` and is read through `src/lib/cart.ts`.
+See sections 6.6, 6.7 and 13.
+
+A cart read resolves current product and variant rows and computes the subtotal with
+the pricing functions. Totals are never stored and never accepted from a client.
+
+## 35.6 Response envelope
+
+Every response uses one shape.
+
+Success:
+
+```json
+{ "data": {}, "error": null }
+```
+
+Failure:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Safe to show a user",
+    "fields": {}
+  }
+}
+```
+
+Codes: `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404),
+`VALIDATION_ERROR` (400), `CONFLICT` (409), `RATE_LIMITED` (429), `INTERNAL` (500).
+
+An unexpected exception must still produce this envelope. Handlers are wrapped so a
+bug returns `INTERNAL` rather than an HTML error page or a stack trace. Internal
+detail goes to the server log only.
+
+Another customer's order returns `NOT_FOUND`, not `FORBIDDEN`, so the response does
+not confirm that the row exists.
+
+## 35.7 Known gap
+
+There is no application-level rate limiter. The token exchange endpoint relies on
+Vercel's platform limits. It must reject an invalid Google ID token before performing
+any database access, so a forged token costs a signature check and nothing more.
