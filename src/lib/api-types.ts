@@ -196,3 +196,18 @@ export type ApiDeliveryArea = {
 export type ApiDeliveryAreas = {
   areas: ApiDeliveryArea[];
 };
+
+// ---------------------------------------------------------------------------
+// Payment
+// ---------------------------------------------------------------------------
+
+export type ApiPaymentMethod = {
+  /** The value to send as `paymentMethod` when placing an order. */
+  id: string;
+  /** Customer-facing name, e.g. "Pay on delivery". */
+  label: string;
+};
+
+export type ApiPaymentMethods = {
+  paymentMethods: ApiPaymentMethod[];
+};

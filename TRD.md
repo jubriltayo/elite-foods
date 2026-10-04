@@ -1663,6 +1663,7 @@ Route handlers live under `src/app/api/v1`. They sit alongside, and do not repla
 | ------ | ------------------------- | ----- | --------------------------------- |
 | `POST` | `/api/v1/auth/token`      | none¹ | Exchange a Google ID token        |
 | `GET`  | `/api/v1/delivery-areas`  | none  | Delivery areas and fees           |
+| `GET`  | `/api/v1/payment-methods` | none  | Valid payment methods             |
 | `GET`  | `/api/v1/products`        | none  | Catalog                           |
 | `GET`  | `/api/v1/products/[slug]` | none  | One product with variants         |
 | `GET`  | `/api/v1/cart`            | req.  | Read the cart, priced server-side |

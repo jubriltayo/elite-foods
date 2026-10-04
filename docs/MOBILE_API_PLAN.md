@@ -28,6 +28,8 @@ This document is the contract handed to the mobile project.
 | 14  | The **order's uuid is exposed**, unlike a product's, because an order has no slug and `/orders/[id]` takes it.                                |
 | 15  | A repeated idempotency key returns the original order and **ignores a differing body**. Recorded, not "fixed".                                |
 | 16  | A public `GET /api/v1/delivery-areas` is added, because `deliveryArea` was validated but never documented to clients.                         |
+| 17  | Payment methods get a **sibling** endpoint, `/api/v1/payment-methods`, rather than being folded into `/delivery-areas`.                       |
+| 18  | Bank transfer details are **not** exposed by that endpoint; they are placeholders and belong on the order confirmation.                       |
 
 ## The problem being solved
 
@@ -582,6 +584,7 @@ confirm the row exists.
 | ------ | ------------------------- | ------------------------------ | --------------------------------------------- |
 | `POST` | `/api/v1/auth/token`      | none (Google ID token in body) | Exchange a Google ID token for a bearer token |
 | `GET`  | `/api/v1/delivery-areas`  | none                           | Delivery areas and their fees                 |
+| `GET`  | `/api/v1/payment-methods` | none                           | Valid payment methods and their labels        |
 | `GET`  | `/api/v1/products`        | none                           | List products                                 |
 | `GET`  | `/api/v1/products/[slug]` | none                           | One product with variants                     |
 | `GET`  | `/api/v1/cart`            | required                       | Read the caller's cart, priced server-side    |
@@ -614,6 +617,47 @@ and could not show a delivery charge before the customer orders.
 figure checkout actually charges: the route prices through the same `deliveryFeeFor`
 the checkout form uses, so the two cannot drift. Verified by feeding every returned
 id through the real `checkoutSchema` and comparing the fee to `deliveryFeeFor`.
+
+#### `GET /api/v1/payment-methods`
+
+Public, and the sibling of `/delivery-areas` for the same reason: `POST /api/v1/orders`
+validates `paymentMethod` against `PAYMENT_METHODS`, and the contract only ever showed
+`"pay_on_delivery"` inside a sample body. A client would have hardcoded the strings and
+would have discovered a change only by receiving a `400`.
+
+```json
+{
+  "data": {
+    "paymentMethods": [
+      { "id": "pay_on_delivery", "label": "Pay on delivery" },
+      { "id": "bank_transfer", "label": "Bank transfer" }
+    ]
+  },
+  "error": null
+}
+```
+
+`id` is the value to send as `paymentMethod`. `label` comes from `paymentMethodLabel`,
+the same function every display surface uses, so the app's button text and this
+endpoint cannot disagree. The list is in the enum's declared order.
+
+Both methods leave the order `unpaid`; bank transfer shows the banking details on the
+confirmation, and there is no automatic reconciliation.
+
+**The bank transfer account details are deliberately not exposed here.** They are
+placeholder values in `config/business.ts` pending the shop's real banking information
+(AGENTS.md section 27), and publishing placeholders as though they were real would be
+worse than publishing nothing. A client renders the choice from this endpoint and shows
+the details on the order confirmation, where the server supplies them once the order
+exists.
+
+Verified, 26 assertions: no credential required; every returned id is accepted by the
+real `checkoutSchema` and is a known payment method; the ids equal `PAYMENT_METHODS` in
+the same order; every label matches `paymentMethodLabel` and labels are distinct; each
+entry has exactly `id` and `label`; the account number, bank name, any 10-digit
+sequence, any email address and any secret name are absent from the response; the route
+reads neither the database, nor authentication, nor `BANK_TRANSFER.accountNumber`; and
+`/delivery-areas` still works.
 
 #### `POST /api/v1/auth/token`
 
@@ -937,6 +981,7 @@ phase-specific verification, plus cleanup of any test data.
 | 4a  | Extract `lib/checkout.ts` from the Server Action | One implementation of the checkout rules                |
 | 4b  | Order endpoints                                  | Mobile can buy and see history                          |
 | 4c  | `/api/v1/delivery-areas`                         | Mobile can show a total before ordering                 |
+| 4d  | `/api/v1/payment-methods`                        | Mobile can render the payment choice from the server    |
 
 **All slices are complete.** The whole customer journey is now reachable from a mobile
 client: browse, sign in as the same customer, share the cart, buy, and read history.
@@ -960,14 +1005,10 @@ places where a mistake is a security or money bug rather than a visual one.
 - **Merge is not atomic** against a concurrent merge from another device.
 - **Several dead lines** can exist in one cart, because `NULL`s are distinct in the
   unique constraint. Intended.
-- **The valid `paymentMethod` values are not exposed.** This is the same class of gap
-  `GET /api/v1/delivery-areas` closed for `deliveryArea`: `checkoutSchema` validates
-  `paymentMethod` against the shared enum in `lib/config/business.ts`, but the
-  contract only ever shows `"pay_on_delivery"` inside a sample body, so a client has
-  to hardcode the strings. Currently `pay_on_delivery` and `bank_transfer`; both leave
-  the order `unpaid`, and `bank_transfer` shows bank details on the confirmation.
-  A three-line addition to the same public reference endpoint would close it. Not
-  added, because phase 4 scoped the new endpoint to delivery areas only.
+- **Bank transfer details are placeholders** in `config/business.ts`. They are marked as
+  such in the source, shown on the order confirmation, and deliberately not exposed by
+  `/api/v1/payment-methods`. They must be replaced with the shop's real banking
+  information before a bank-transfer order can be fulfilled.
 - **Mailgun is a free sandbox account.** It only delivers to authorised recipients and
   returns `403` for anyone else. The order is unaffected — that is the point, and it is
   now verified — but before a real launch the account needs a paid plan or a verified
