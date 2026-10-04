@@ -67,6 +67,47 @@ const mailgunEnvSchema = z.object({
 
 export type MailgunEnv = z.infer<typeof mailgunEnvSchema>;
 
+/**
+ * Mobile API authentication (Phase 3, TRD section 35.3).
+ *
+ * `API_TOKEN_SECRET` signs the bearer tokens this application issues to the mobile
+ * app. It is deliberately NOT `AUTH_SECRET`: separate secrets mean compromising one
+ * does not compromise the other, so a stolen web session secret cannot be used to
+ * mint API tokens and a leaked API token says nothing about web sessions.
+ *
+ * `API_TOKEN_ISSUER` defaults to the site URL, which differs between development
+ * and production. That is what stops a token minted on localhost being replayed
+ * against the deployed app. `API_TOKEN_AUDIENCE` names what these tokens are for,
+ * so a token minted for a different purpose cannot be presented here.
+ *
+ * `GOOGLE_EXTRA_CLIENT_IDS` is optional and comma-separated. It exists for the
+ * Android and iOS client ids, which are separate OAuth clients from the web one.
+ * Until those exist, `GOOGLE_CLIENT_ID` alone is the only allowed audience, so
+ * local testing needs no additional Google credentials.
+ */
+const apiAuthEnvSchema = z.object({
+  /** Signing key for our own bearer tokens. Long enough to be worth having. */
+  API_TOKEN_SECRET: z
+    .string()
+    .min(32, "API_TOKEN_SECRET must be at least 32 characters"),
+  API_TOKEN_ISSUER: z.string().min(1).optional(),
+  API_TOKEN_AUDIENCE: z.string().min(1).optional(),
+  /** The web OAuth client. Also the default allowed audience for a Google token. */
+  GOOGLE_CLIENT_ID: z.string().min(1),
+  /** Extra allowed audiences, comma-separated. Optional. */
+  GOOGLE_EXTRA_CLIENT_IDS: z.string().optional(),
+  /** Used only to derive the default issuer. */
+  NEXT_PUBLIC_SITE_URL: z.url().optional(),
+});
+
+export type ApiAuthEnv = {
+  apiTokenSecret: string;
+  apiTokenIssuer: string;
+  apiTokenAudience: string;
+  /** Every client id whose Google tokens we accept, web first. */
+  allowedGoogleClientIds: string[];
+};
+
 function parseSupabaseEnv() {
   const parsed = supabaseEnvSchema.safeParse({
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -171,4 +212,65 @@ export function getMailgunEnv(): MailgunEnv {
   };
 
   return mailgunCached;
+}
+
+/**
+ * Builds the API auth configuration, or throws with the offending variable names
+ * only. Values are never included, so a misconfigured secret cannot reach a log.
+ */
+function parseApiAuthEnv(): ApiAuthEnv {
+  const parsed = apiAuthEnvSchema.safeParse({
+    API_TOKEN_SECRET: process.env.API_TOKEN_SECRET,
+    API_TOKEN_ISSUER: process.env.API_TOKEN_ISSUER || undefined,
+    API_TOKEN_AUDIENCE: process.env.API_TOKEN_AUDIENCE || undefined,
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_EXTRA_CLIENT_IDS: process.env.GOOGLE_EXTRA_CLIENT_IDS || undefined,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || undefined,
+  });
+
+  if (!parsed.success) {
+    const details = parsed.error.issues
+      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+      .join("; ");
+
+    throw new Error(
+      `Missing or invalid mobile API environment variables (${details}). ` +
+        "Copy .env.example to .env.local and fill in the values.",
+    );
+  }
+
+  const extra = (parsed.data.GOOGLE_EXTRA_CLIENT_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return {
+    apiTokenSecret: parsed.data.API_TOKEN_SECRET,
+    // Falls back to the site URL so a localhost token cannot be replayed in
+    // production, where NEXT_PUBLIC_SITE_URL is the real domain.
+    apiTokenIssuer:
+      parsed.data.API_TOKEN_ISSUER ??
+      parsed.data.NEXT_PUBLIC_SITE_URL ??
+      "elite-foods-api",
+    apiTokenAudience: parsed.data.API_TOKEN_AUDIENCE ?? "elite-foods-api",
+    // De-duplicated so a repeated client id cannot widen the accepted set.
+    allowedGoogleClientIds: [
+      ...new Set([parsed.data.GOOGLE_CLIENT_ID, ...extra]),
+    ],
+  };
+}
+
+let apiAuthCached: ApiAuthEnv | undefined;
+
+/**
+ * Server-only configuration for the mobile API. Never import into a Client
+ * Component.
+ *
+ * Validated lazily and independently of the other feature groups, so an
+ * unconfigured API_TOKEN_SECRET never blocks browsing, the web cart or web
+ * checkout (TRD section 16, same reasoning as Mailgun).
+ */
+export function getApiAuthEnv(): ApiAuthEnv {
+  apiAuthCached ??= parseApiAuthEnv();
+  return apiAuthCached;
 }

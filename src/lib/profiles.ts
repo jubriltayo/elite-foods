@@ -113,6 +113,43 @@ export async function getProfileById(id: string): Promise<Profile | null> {
 }
 
 /**
+ * Loads a profile by Google's stable account id.
+ *
+ * This is the lookup that makes a mobile customer the same customer as a web
+ * customer: both transports resolve identity through `google_sub`, so the same
+ * Google account always lands on the same row.
+ *
+ * The email is deliberately not accepted as an alternative key. Email can change
+ * and is not unique (AGENTS.md section 7).
+ *
+ * Read-only, and separate from `upsertProfileFromGoogle`, so a caller that only
+ * needs to resolve an existing account does not write on every request. The token
+ * exchange uses this first and only falls back to the upsert when it returns null,
+ * which is what creates a profile for a first-time mobile sign-in.
+ *
+ * @returns null when no profile exists for that Google account.
+ */
+export async function getProfileByGoogleSub(
+  googleSub: string,
+): Promise<Profile | null> {
+  if (!googleSub) {
+    return null;
+  }
+
+  const { data, error } = await getSupabase()
+    .from("profiles")
+    .select(PROFILE_COLUMNS)
+    .eq("google_sub", googleSub)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Could not load profile: ${error.message}`);
+  }
+
+  return data ? toProfile(data) : null;
+}
+
+/**
  * Returns the signed-in user's profile, or null when signed out.
  *
  * The Auth.js session supplies only the profile id. The profile row — including
