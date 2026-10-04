@@ -12,6 +12,12 @@ import { ZodError } from "zod";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { getCurrentProfile, type Profile } from "@/lib/profiles";
 import {
+  assertCartCanBeOrdered,
+  CartNotOrderableError,
+  clearCartForProfile,
+  readCartForProfile,
+} from "@/lib/cart";
+import {
   CheckoutFailure,
   createOrderForProfile,
   getOrderOwnedByProfile,
@@ -65,11 +71,34 @@ export async function placeOrder(
 
   // 4-13. Authoritative lookup, availability, pricing and atomic creation.
   try {
+    // Checkout reads the SERVER cart, never the items the form submitted.
+    // The submitted list is not authoritative and is only used to satisfy the
+    // schema's shape; the real basket is resolved here, so a tampered or stale
+    // form cannot change what is ordered (AGENTS.md section 5).
+    const cart = await readCartForProfile(profile);
+
+    // A line the shop cannot fulfil blocks the order rather than being silently
+    // dropped, which would quietly change what the customer is buying.
+    assertCartCanBeOrdered(cart);
+
     const order = await createOrderForProfile(
       profile,
-      parsed.data,
+      {
+        ...parsed.data,
+        items: cart.items.map((line) => ({
+          variantId: line.variantId,
+          quantity: line.quantity,
+        })),
+      },
       parsed.data.idempotencyKey,
     );
+
+    // The order exists and is authoritative, so the saved cart has served its
+    // purpose. Cleared only after creation succeeded: a failure above leaves the
+    // basket intact so the customer can try again.
+    await clearCartForProfile(profile).catch((error) => {
+      console.error("cart could not be cleared after order", error);
+    });
 
     // 14. Attempt the confirmation email.
     //
@@ -78,8 +107,8 @@ export async function placeOrder(
     // never delete, roll back or duplicate the order (TRD section 16).
     const emailSent = await notifyOrderConfirmation(order.id, profile);
 
-    // Success is returned rather than redirected so the client can clear the
-    // cart before navigating (AGENTS.md section 8, steps 15-17).
+    // Success is returned rather than redirected so the client can clear its
+    // view before navigating (AGENTS.md section 8, steps 15-17).
     return {
       ok: true,
       orderId: order.id,
@@ -87,6 +116,10 @@ export async function placeOrder(
       emailSent,
     };
   } catch (error) {
+    if (error instanceof CartNotOrderableError) {
+      return { ok: false, formError: error.message };
+    }
+
     if (error instanceof CheckoutFailure) {
       return { ok: false, formError: messageFor(error.detail) };
     }

@@ -29,52 +29,24 @@ import { getSupabase } from "@/lib/db";
 import { calculateSubtotal, type PriceLine } from "@/lib/pricing";
 import { MAX_QUANTITY, type CartPayload } from "@/lib/validation";
 import type { Profile } from "@/lib/profiles";
+import {
+  hasBlockingCartIssue,
+  type ApiCart,
+  type ApiCartIssue,
+  type ApiCartIssueReason,
+  type ApiCartLine,
+} from "@/lib/api-types";
 
-/** Why a line cannot be ordered as it stands. */
-export type CartIssueReason =
-  /** The variant was deleted. The line is retained but unusable. */
-  | "variant_missing"
-  /** The parent product was deleted. */
-  | "product_missing"
-  /** The product exists but is marked unavailable. */
-  | "unavailable"
-  /** The requested quantity was reduced to MAX_QUANTITY. */
-  | "quantity_capped";
-
-export type CartIssue = {
-  /** Stable id of the offending line, so a client can offer to remove it. */
-  lineId: string;
-  /** Null for a line whose variant was deleted. */
-  variantId: string | null;
-  reason: CartIssueReason;
-};
-
-export type ServerCartLine = {
-  lineId: string;
-  variantId: string;
-  quantity: number;
-  product: {
-    slug: string;
-    name: string;
-    isAvailable: boolean;
-  };
-  variant: {
-    label: string;
-    /** Whole Naira integer (AGENTS.md section 7). */
-    price: number;
-  };
-  lineTotal: number;
-};
-
-export type ServerCart = {
-  /** Only orderable lines. Dead and unavailable lines appear in `issues`. */
-  items: ServerCartLine[];
-  issues: CartIssue[];
-  /** Sum over orderable lines only. Whole Naira integer. */
-  subtotal: number;
-  /** Total units across orderable lines. Whole number. */
-  itemCount: number;
-};
+/**
+ * The cart shape returned to a client.
+ *
+ * Aliased from the shared wire types rather than redeclared, so the server and
+ * the cart store cannot drift apart.
+ */
+export type ServerCart = ApiCart;
+export type CartIssue = ApiCartIssue;
+export type CartIssueReason = ApiCartIssueReason;
+export type ServerCartLine = ApiCartLine;
 
 /** Thrown when a cart cannot be turned into an order as it stands. */
 export class CartNotOrderableError extends Error {
@@ -225,12 +197,10 @@ export async function clearCartForProfile(profile: Profile): Promise<void> {
  * an order item from a dead line.
  */
 export function assertCartCanBeOrdered(cart: ServerCart): void {
-  const blocking = cart.issues.filter(
-    (issue) => issue.reason !== "quantity_capped",
-  );
-
-  if (blocking.length > 0) {
-    throw new CartNotOrderableError(blocking);
+  if (hasBlockingCartIssue(cart)) {
+    throw new CartNotOrderableError(
+      cart.issues.filter((issue) => issue.reason !== "quantity_capped"),
+    );
   }
 }
 

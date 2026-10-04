@@ -36,7 +36,13 @@ export function CheckoutForm({
   products: Product[];
   defaults: { customerName: string; customerEmail: string };
 }) {
-  const { items, hydrated, clear } = useCart();
+  const {
+    items,
+    hydrated,
+    lines,
+    subtotal: serverSubtotal,
+    refresh,
+  } = useCart();
   const router = useRouter();
 
   const [state, formAction, pending] = useActionState<
@@ -89,21 +95,29 @@ export function CheckoutForm({
     });
   }, [items, products]);
 
-  const subtotal = rows.reduce(
+  // The server already priced the cart when it was read, so its subtotal is used
+  // directly. The catalog-derived figure remains the display fallback for a
+  // device cart, where no server subtotal exists (TRD section 13).
+  const catalogSubtotal = rows.reduce(
     (total, row) => total + lineTotal(row.variant.price, row.quantity),
     0,
   );
+  const subtotal =
+    lines !== null ? (serverSubtotal ?? catalogSubtotal) : catalogSubtotal;
   const fee = selectedArea ? deliveryFeeFor(selectedArea) : 0;
 
-  // On success: clear the cart, then go to the confirmation page.
+  // On success: refresh the cart, then go to the confirmation page.
+  //
+  // The server action already cleared the saved cart once the order was durable,
+  // so this only re-reads it. Clearing again would be a redundant request.
   useEffect(() => {
     if (state?.ok) {
-      clear();
+      void refresh();
       router.push(
         `/orders/${state.orderId}/confirmation?email=${state.emailSent ? "sent" : "failed"}`,
       );
     }
-  }, [state, clear, router]);
+  }, [state, refresh, router]);
 
   if (!hydrated) {
     return (
@@ -399,7 +413,11 @@ export function CheckoutForm({
           We check prices and availability again when you place the order.
         </p>
 
-        {/* Values the server must not take from the browser, for auditability. */}
+        {/*
+          Sent for schema shape and auditability only. The server action reads the
+          saved cart itself and ignores these values, so a tampered or stale form
+          cannot change what is ordered (AGENTS.md section 5).
+        */}
         <input type="hidden" name="items" value={JSON.stringify(items)} />
         <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 

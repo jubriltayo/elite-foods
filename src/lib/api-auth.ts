@@ -30,8 +30,13 @@ import { unauthenticated } from "@/lib/api-response";
  *
  * @throws ApiError UNAUTHENTICATED when no valid credential is present.
  */
-export async function requireApiProfile(_request: Request): Promise<Profile> {
-  // Phase 3: try the bearer token first, then fall through to the session below.
+export async function requireApiProfile(
+  // The request is the phase 3 bearer-token branch, which reads the
+  // Authorization header. The session path does not need it, but the signature
+  // must not change when that branch is added.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _request: Request,
+): Promise<Profile> {
   const profile = await getCurrentProfile();
 
   if (!profile) {
