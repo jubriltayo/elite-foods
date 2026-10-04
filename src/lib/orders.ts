@@ -307,11 +307,45 @@ export async function getOrderOwnedByProfile(
   };
 }
 
+/**
+ * Finds a profile's order by its idempotency key.
+ *
+ * This exists so a retried submission returns the original order BEFORE the cart
+ * is consulted. That ordering matters: `createOrderForProfile` rejects an empty
+ * item list, and the cart has already been emptied by the successful first attempt,
+ * so without this a retry would fail with "your cart is empty" instead of returning
+ * the order it already created (TRD section 11).
+ *
+ * Ownership is enforced in the WHERE clause, exactly as in
+ * `getOrderOwnedByProfile`. A key belonging to another customer matches nothing, so
+ * possessing someone's key does not reveal their order.
+ *
+ * @returns the order, or null when this profile has no order with that key.
+ */
+export async function findOrderForProfileByIdempotencyKey(
+  profile: Profile,
+  idempotencyKey: string,
+): Promise<Order | null> {
+  await connection();
+
+  const { data, error } = await getSupabase()
+    .from("orders")
+    .select(ORDER_COLUMNS)
+    .eq("idempotency_key", idempotencyKey)
+    .eq("user_id", profile.id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Could not load order: ${error.message}`);
+  }
+
+  return (data as Order | null) ?? null;
+}
+
 /** An order in the history list, with just enough item detail to be recognisable. */
 export type OrderSummary = Order & {
   items: { productName: string; quantity: number }[];
 };
-
 /**
  * Lists every order belonging to one customer, newest first (TRD section 22).
  *

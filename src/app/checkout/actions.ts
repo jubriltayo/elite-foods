@@ -3,25 +3,20 @@
 /**
  * Checkout server action (TRD section 9).
  *
- * Server-only entry point. The browser submits variant ids, quantities and
- * delivery details; everything else is decided here.
+ * The browser form's entry point. This is a TRANSPORT: it resolves the session,
+ * parses the form, and hands already-validated input to `placeOrderForProfile`.
+ *
+ * Every rule about what may be ordered, what it costs and when the cart is cleared
+ * lives in `lib/checkout.ts`, which the `/api/v1/orders` route calls too. There is
+ * deliberately no second copy of those rules here.
  */
 
 import { redirect } from "next/navigation";
 import { ZodError } from "zod";
-import { sendOrderConfirmationEmail } from "@/lib/email";
-import { getCurrentProfile, type Profile } from "@/lib/profiles";
-import {
-  assertCartCanBeOrdered,
-  CartNotOrderableError,
-  clearCartForProfile,
-  readCartForProfile,
-} from "@/lib/cart";
-import {
-  CheckoutFailure,
-  createOrderForProfile,
-  getOrderOwnedByProfile,
-} from "@/lib/orders";
+import { getCurrentProfile } from "@/lib/profiles";
+import { CartNotOrderableError } from "@/lib/cart";
+import { CheckoutFailure } from "@/lib/orders";
+import { checkoutFailureMessage, placeOrderForProfile } from "@/lib/checkout";
 import { checkoutSchema } from "@/lib/validation";
 
 /** Serializable result for useActionState. Never carries a raw Error. */
@@ -55,9 +50,9 @@ export async function placeOrder(
     deliveryAddress: formData.get("deliveryAddress"),
     note: formData.get("note") ?? undefined,
     idempotencyKey: formData.get("idempotencyKey") || undefined,
-    // The customer chooses how to pay. This is a choice between two known
-    // methods, not an instruction about money: pricing, totals and status stay
-    // server-side (AGENTS.md section 5).
+    // The customer chooses how to pay. This is a choice between two known methods,
+    // not an instruction about money: pricing, totals and status stay server-side
+    // (AGENTS.md section 5).
     paymentMethod: formData.get("paymentMethod"),
   });
 
@@ -69,51 +64,18 @@ export async function placeOrder(
     };
   }
 
-  // 4-13. Authoritative lookup, availability, pricing and atomic creation.
   try {
-    // Checkout reads the SERVER cart, never the items the form submitted.
-    // The submitted list is not authoritative and is only used to satisfy the
-    // schema's shape; the real basket is resolved here, so a tampered or stale
-    // form cannot change what is ordered (AGENTS.md section 5).
-    const cart = await readCartForProfile(profile);
+    // 4-14. Authoritative lookup, availability, pricing, atomic creation, cart
+    // clear and best-effort email. Shared with the API route via lib/checkout.ts.
+    const result = await placeOrderForProfile(profile, parsed.data);
 
-    // A line the shop cannot fulfil blocks the order rather than being silently
-    // dropped, which would quietly change what the customer is buying.
-    assertCartCanBeOrdered(cart);
-
-    const order = await createOrderForProfile(
-      profile,
-      {
-        ...parsed.data,
-        items: cart.items.map((line) => ({
-          variantId: line.variantId,
-          quantity: line.quantity,
-        })),
-      },
-      parsed.data.idempotencyKey,
-    );
-
-    // The order exists and is authoritative, so the saved cart has served its
-    // purpose. Cleared only after creation succeeded: a failure above leaves the
-    // basket intact so the customer can try again.
-    await clearCartForProfile(profile).catch((error) => {
-      console.error("cart could not be cleared after order", error);
-    });
-
-    // 14. Attempt the confirmation email.
-    //
-    // The order already exists and is authoritative. Email is best-effort: a
-    // failure is logged and the customer still sees their confirmation. It must
-    // never delete, roll back or duplicate the order (TRD section 16).
-    const emailSent = await notifyOrderConfirmation(order.id, profile);
-
-    // Success is returned rather than redirected so the client can clear its
-    // view before navigating (AGENTS.md section 8, steps 15-17).
+    // Success is returned rather than redirected so the client can clear its view
+    // before navigating (AGENTS.md section 8, steps 15-17).
     return {
       ok: true,
-      orderId: order.id,
-      orderNumber: order.order_number,
-      emailSent,
+      orderId: result.order.id,
+      orderNumber: result.order.order_number,
+      emailSent: result.emailSent,
     };
   } catch (error) {
     if (error instanceof CartNotOrderableError) {
@@ -121,7 +83,7 @@ export async function placeOrder(
     }
 
     if (error instanceof CheckoutFailure) {
-      return { ok: false, formError: messageFor(error.detail) };
+      return { ok: false, formError: checkoutFailureMessage(error.detail) };
     }
 
     // Unexpected: log server-side, show something safe to the customer.
@@ -134,51 +96,8 @@ export async function placeOrder(
   }
 }
 
-/**
- * Sends the confirmation email for a created order.
- *
- * Returns whether the email was accepted by Mailgun. Swallows every failure so
- * the caller can treat email as best-effort. Any error is logged server-side
- * with the order number, which is safe to log; credentials never reach here.
- */
-async function notifyOrderConfirmation(
-  orderId: string,
-  profile: Profile,
-): Promise<boolean> {
-  try {
-    // Re-read the persisted order so the email shows the snapshots that were
-    // actually stored, not what we intended to store.
-    const order = await getOrderOwnedByProfile(orderId, profile);
-
-    if (!order) {
-      console.error(`order confirmation skipped: order ${orderId} not found`);
-      return false;
-    }
-
-    const result = await sendOrderConfirmationEmail(order);
-
-    if (result.sent) {
-      console.log(`order confirmation email queued for ${order.order_number}`);
-      return true;
-    }
-
-    // Order stays valid; only the email failed.
-    console.error(
-      `order confirmation email FAILED for ${order.order_number}: ${result.error}`,
-    );
-    return false;
-  } catch (error) {
-    console.error(
-      `order confirmation email ERRORED for order ${orderId}:`,
-      error instanceof Error ? error.message : error,
-    );
-    return false;
-  }
-}
-
-/** Reads the JSON cart payload the form submits. */ function parseItems(
-  raw: FormDataEntryValue | null,
-): unknown {
+/** Reads the JSON cart payload the form submits. */
+function parseItems(raw: FormDataEntryValue | null): unknown {
   if (typeof raw !== "string") return [];
   try {
     return JSON.parse(raw);
@@ -199,20 +118,4 @@ function fieldErrorsFrom(error: ZodError): Record<string, string> {
   }
 
   return result;
-}
-
-/** Customer-safe wording for each failure type (AGENTS.md section 21). */
-function messageFor(detail: { kind: string; productName?: string }): string {
-  switch (detail.kind) {
-    case "empty-cart":
-      return "Your cart is empty.";
-    case "invalid-variant":
-      return "One of the items in your cart no longer exists. Please review your cart.";
-    case "unavailable":
-      return `${detail.productName} is no longer available. Please remove it from your cart.`;
-    case "invalid-quantity":
-      return `The quantity for ${detail.productName} is not valid.`;
-    default:
-      return "We could not place your order just now. Please try again in a moment.";
-  }
 }
