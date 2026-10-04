@@ -179,3 +179,20 @@ export type ApiOrderPlaced = Omit<ApiOrderSummary, "itemCount"> & {
    */
   idempotentReplay: boolean;
 };
+
+// ---------------------------------------------------------------------------
+// Delivery
+// ---------------------------------------------------------------------------
+
+export type ApiDeliveryArea = {
+  /** The value to send as `deliveryArea` when placing an order. */
+  id: string;
+  /** Customer-facing name, e.g. "Abeokuta". */
+  label: string;
+  /** Whole Naira integer, the same figure checkout charges. */
+  fee: number;
+};
+
+export type ApiDeliveryAreas = {
+  areas: ApiDeliveryArea[];
+};
