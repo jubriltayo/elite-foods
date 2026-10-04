@@ -123,3 +123,59 @@ export type ApiCatalogProduct = {
 export type ApiCatalog = {
   products: ApiCatalogProduct[];
 };
+
+// ---------------------------------------------------------------------------
+// Orders
+// ---------------------------------------------------------------------------
+
+export type ApiOrderSummary = {
+  /**
+   * The order's uuid. Unlike a product, an order has no slug, so this id IS part
+   * of the contract: `/orders/[id]` takes it.
+   */
+  id: string;
+  orderNumber: string;
+  status: string;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  createdAt: string;
+  /** Total units across the order's lines. */
+  itemCount: number;
+};
+
+export type ApiOrderItem = {
+  /** Null when the variant was later deleted. The snapshot below still stands. */
+  variantId: string | null;
+  /** Historical snapshot: correct even if the product is renamed or repriced. */
+  productName: string;
+  variantLabel: string;
+  /** Whole Naira integer, as it was when the order was placed. */
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
+};
+
+export type ApiOrder = ApiOrderSummary & {
+  customerName: string;
+  customerPhone: string;
+  deliveryArea: string;
+  deliveryAddress: string;
+  note: string | null;
+  items: ApiOrderItem[];
+};
+
+export type ApiOrderPlaced = Omit<ApiOrderSummary, "itemCount"> & {
+  /**
+   * Whether the confirmation email was accepted. Never affects the order, which
+   * exists and is authoritative regardless.
+   */
+  emailSent: boolean;
+  /**
+   * True when an idempotency key matched an existing order, so this call created
+   * nothing, cleared no cart and sent no second email.
+   */
+  idempotentReplay: boolean;
+};

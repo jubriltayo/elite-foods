@@ -48,23 +48,33 @@ export type PlaceOrderOutcome = {
 };
 
 /**
+ * Everything a customer supplies to place an order, minus the items.
+ *
+ * `items` is omitted from the type on purpose. A transport physically cannot pass
+ * a basket here, which is how "the cart is the only source of truth" stops being a
+ * convention and becomes a compile error. The web action's parsed payload still
+ * carries an `items` field for schema shape; it is discarded here.
+ */
+export type PlaceOrderRequest = Omit<CheckoutInput, "items">;
+
+/**
  * Places an order for a profile from their saved cart.
  *
- * @param input already validated by `checkoutSchema`. Its `items` are ignored:
- *   the server cart is authoritative.
+ * @param request already validated by `checkoutSchema`. No items are taken from
+ *   it: the server cart is authoritative.
  * @throws CheckoutFailure when the order cannot be created.
  * @throws CartNotOrderableError when the cart holds a line that cannot be ordered.
  */
 export async function placeOrderForProfile(
   profile: Profile,
-  input: CheckoutInput,
+  request: PlaceOrderRequest,
 ): Promise<PlaceOrderOutcome> {
   // An idempotency retry is answered BEFORE the cart is read. The first attempt
   // emptied the cart, so consulting it first would reject the retry as empty.
-  if (input.idempotencyKey) {
+  if (request.idempotencyKey) {
     const existing = await findOrderForProfileByIdempotencyKey(
       profile,
-      input.idempotencyKey,
+      request.idempotencyKey,
     );
 
     if (existing) {
@@ -79,14 +89,15 @@ export async function placeOrderForProfile(
   const order = await createOrderForProfile(
     profile,
     {
-      ...input,
-      // The request's items are never used. Only what the server has priced.
+      ...request,
+      // Anything the caller sent as items is discarded. Only what the server has
+      // priced and validated becomes the order.
       items: cart.items.map((line) => ({
         variantId: line.variantId,
         quantity: line.quantity,
       })),
     },
-    input.idempotencyKey,
+    request.idempotencyKey,
   );
 
   // The order exists and is authoritative, so the saved cart has done its job.
