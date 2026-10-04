@@ -245,7 +245,7 @@ accidentally widening a query, mitigated by delegating to `lib/products.ts`.
 
 ---
 
-## Phase 3 — Bearer-token authentication (approved separately, not started)
+## Phase 3 - Bearer-token authentication (complete)
 
 Independently shippable. This is the phase that makes the API usable by a
 non-browser client at all.
@@ -302,8 +302,35 @@ token is valid for a month and cannot be revoked. Not recommended.
 | `src/app/api/v1/auth/token/route.ts` | **new.** `POST`                                                                                                                                                                                          |
 | `.env.example`                       | document the new variables with placeholders                                                                                                                                                             |
 
-An unconfigured mobile client id must never block browsing or web checkout, so
-`getMobileAuthEnv()` follows the existing lazy-validation pattern.
+An unconfigured `API_TOKEN_SECRET` must never block browsing, the web cart or web
+checkout, so `getApiAuthEnv()` follows the existing lazy-validation pattern.
+
+### 3.2a Environment variables
+
+| Variable                  | Required | Purpose                                                                                       |
+| ------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `API_TOKEN_SECRET`        | **yes**  | Signs our bearer tokens. At least 32 characters. Must **not** equal `AUTH_SECRET`.            |
+| `API_TOKEN_ISSUER`        | no       | Who our tokens are issued by. Defaults to `NEXT_PUBLIC_SITE_URL`.                             |
+| `API_TOKEN_AUDIENCE`      | no       | What our tokens are for. Defaults to `elite-foods-api`.                                       |
+| `GOOGLE_EXTRA_CLIENT_IDS` | no       | Comma-separated extra Google client ids (Android/iOS). `GOOGLE_CLIENT_ID` is always accepted. |
+
+Generate the secret with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+```
+
+Because the issuer defaults to the site URL, a token minted in development is
+refused in production and vice versa, with no extra configuration.
+
+### 3.2b What a bearer token does and does not grant
+
+A bearer token authenticates **`/api/v1/*` routes only**. It does **not**
+authenticate a Next.js page, so presenting one to `/admin` or `/orders` is
+equivalent to being signed out and redirects to sign-in.
+
+That is deliberate: it means a leaked API token cannot be used to browse the web
+application. The mobile app never renders these pages, so it loses nothing.
 
 ### 3.3 Request handling rules
 
@@ -502,8 +529,21 @@ confirm the row exists.
 }
 ```
 
-`role` is in the **response** for UI convenience only. It is never in the token and
-never trusted for authorization.
+`role` is in the **response** for display convenience only. It is never in the token and
+never trusted for authorization: `requireApiProfile` re-reads the profile row on every
+request.
+
+`expiresIn` is 3600 seconds. The token payload is **exactly five claims** and nothing
+else: `sub`, `iat`, `exp`, `iss`, `aud`. `sub` is the `profiles.id`. There is no `role`,
+no `email` and no `name`, and verification refuses any token carrying an extra claim,
+so a role cannot be smuggled in even if one were somehow forged.
+
+**When `expiresIn` elapses, call this endpoint again with a fresh Google ID token.**
+There is no refresh token and no session table. Get the new ID token from the native
+SDK's silent sign-in, then repeat this call.
+
+Do not retry a `401` from this endpoint in a tight loop: it means the Google token was
+not acceptable.
 
 #### `GET /api/v1/products`
 
@@ -713,8 +753,16 @@ places where a mistake is a security or money bug rather than a visual one.
 
 ## Known gaps
 
-- **No application-level rate limiter.** The token endpoint relies on Vercel's
-  platform limits and rejects invalid tokens before any database access.
+- **No application-level rate limiter.** `POST /api/v1/auth/token` is unauthenticated
+  by definition and relies on Vercel's platform limits. It fails fast: an invalid
+  Google token is rejected after a signature check and **before any database access**,
+  verified by asserting that a run of rejected tokens creates no `profiles` rows. A
+  per-IP limiter would be the fix if this endpoint is ever abused.
+- **No token revocation.** Tokens are stateless and cannot be withdrawn before they
+  expire, so a leaked token is valid for up to one hour. Signing out of the mobile app
+  discards the token locally but does not invalidate it server-side. Adding
+  revocation would mean a session table or a deny-list, which is the machinery this
+  design deliberately avoids. The one-hour TTL bounds it.
 - **Last-write-wins on the cart** across devices. Accepted for MVP.
 - **Merge is not atomic** against a concurrent merge from another device.
 - **Several dead lines** can exist in one cart, because `NULL`s are distinct in the
