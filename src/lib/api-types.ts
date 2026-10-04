@@ -125,6 +125,21 @@ export type ApiCatalog = {
 };
 
 // ---------------------------------------------------------------------------
+// Categories
+// ---------------------------------------------------------------------------
+
+export type ApiCategory = {
+  /** The value to send as `?category=` when listing products. */
+  id: string;
+  /** Customer-facing name, e.g. "Fried Snacks". */
+  label: string;
+};
+
+export type ApiCategories = {
+  categories: ApiCategory[];
+};
+
+// ---------------------------------------------------------------------------
 // Orders
 // ---------------------------------------------------------------------------
 
