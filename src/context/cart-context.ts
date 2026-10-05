@@ -370,18 +370,30 @@ function applyTo(
 ): CartItem[] {
   const existing = items.find((item) => item.variantId === variantId);
 
-  if (!existing) {
-    const added = clampQuantity(change(0));
-    return added > 0 ? [...items, { variantId, quantity: added }] : items;
+  // Whether the line survives is decided on the RAW result, before clamping.
+  //
+  // `clampQuantity` floors at 1, so clamping first turned every removal into "set the
+  // quantity to 1": Remove on a single-unit line left it at 1 and appeared to do
+  // nothing, while Remove on a line of 3 only reduced it to 1. It also meant
+  // decrementing past 1 could never remove the line. Clamping exists to keep a line
+  // that is being KEPT inside 1..MAX_QUANTITY, which is also what guarantees a 0 can
+  // never reach the server, since `cartPayloadSchema` rejects a quantity below 1.
+  const requested = change(existing ? existing.quantity : 0);
+
+  if (requested <= 0) {
+    // A variant that is not in the cart has no line to remove, and must not be added.
+    return existing
+      ? items.filter((item) => item.variantId !== variantId)
+      : items;
   }
 
-  const next = clampQuantity(change(existing.quantity));
+  const quantity = clampQuantity(requested);
 
-  return next > 0
+  return existing
     ? items.map((item) =>
-        item.variantId === variantId ? { ...item, quantity: next } : item,
+        item.variantId === variantId ? { ...item, quantity } : item,
       )
-    : items.filter((item) => item.variantId !== variantId);
+    : [...items, { variantId, quantity }];
 }
 
 /**
