@@ -124,25 +124,23 @@ export function paymentMethodLabel(method: string): string {
 /**
  * Bank transfer details.
  *
- * PLACEHOLDER VALUES - NOT REAL
- * ------------------------------
- * Per AGENTS.md section 27 the Elite Foods bank details are an open business
- * decision and have NOT been supplied. These values are deliberately obvious
- * placeholders so nobody can mistake them for real banking details and pay the
- * wrong account.
+ * DEMO VALUES - NOT A REAL ACCOUNT
+ * --------------------------------
+ * The shop's real banking details are an open business decision and have NOT been
+ * supplied (AGENTS.md section 27). Nothing here can receive money.
  *
- * Before launch, replace every value below with the confirmed details from the
- * business. Nothing else needs to change: the checkout, confirmation, order
- * history and admin views all read from here.
+ * Before launch, replace every value below with the details confirmed by the
+ * business. Nothing else needs to change: the checkout form, order confirmation,
+ * order history, admin views and the mobile API all read from here.
  */
 export const BANK_TRANSFER = {
-  bankName: "PLACEHOLDER - bank name not yet confirmed",
-  accountName: "PLACEHOLDER - account name not yet confirmed",
-  accountNumber: "0000000000",
+  bankName: "Demo Bank",
+  accountName: "Elite Foods Demo",
+  accountNumber: "0123456789",
   /**
    * What the customer should put in the transfer reference. Optional, so an
    * empty string simply omits the instruction.
    */
   instructions:
-    "Transfer the exact amount using your bank app, then enter your order number in the transfer reference so we can match it. We confirm receipt before dispatch.",
+    "Demo only. No real payment is taken. Transfer the exact amount using your bank app, then enter your order number in the transfer reference so we can match it.",
 } as const;
